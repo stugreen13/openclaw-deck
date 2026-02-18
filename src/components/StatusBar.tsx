@@ -12,18 +12,22 @@ export function StatusBar() {
         {gatewayUrl}{" "}
         <span
           className={
-            !stats.gatewayConnected
-              ? styles.disconnected
-              : stats.waitingForUser > 0
-                ? styles.connectedReady
-                : styles.connectedIdle
+            stats.gatewayPairingRequired
+              ? styles.pairing
+              : !stats.gatewayConnected
+                ? styles.disconnected
+                : stats.waitingForUser > 0
+                  ? styles.connectedReady
+                  : styles.connectedIdle
           }
         >
-          {!stats.gatewayConnected
-            ? "disconnected"
-            : stats.waitingForUser > 0
-              ? "connected · waiting"
-              : "connected"}
+          {stats.gatewayPairingRequired
+            ? "awaiting approval"
+            : !stats.gatewayConnected
+              ? "disconnected"
+              : stats.waitingForUser > 0
+                ? "connected · waiting"
+                : "connected"}
         </span>
       </span>
       <span className={styles.sep}>·</span>

@@ -19,6 +19,10 @@
   color: inherit;
 }
 
+.pairing {
+  color: rgb(234, 179, 8);
+}
+
 .sep {
   opacity: 0.3;
 }

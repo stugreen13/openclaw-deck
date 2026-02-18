@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import "./App.css";
+import { AddAgentModal } from "./components/AddAgentModal";
+import { AgentColumn } from "./components/AgentColumn";
+import { StatusBar } from "./components/StatusBar";
+import { TopBar } from "./components/TopBar";
 import { useDeckInit } from "./hooks";
 import { useDeckStore } from "./lib/store";
-import { AgentColumn } from "./components/AgentColumn";
-import { TopBar } from "./components/TopBar";
-import { StatusBar } from "./components/StatusBar";
-import { AddAgentModal } from "./components/AddAgentModal";
 import type { AgentConfig } from "./types";
-import "./App.css";
 
 /**
  * Agent column configuration.

@@ -69,6 +69,7 @@ export function useAutoScroll(dep: unknown) {
 export function useDeckStats() {
   const sessions = useDeckStore((s) => s.sessions);
   const connected = useDeckStore((s) => s.gatewayConnected);
+  const pairingRequired = useDeckStore((s) => s.gatewayPairingRequired);
 
   const agents = Object.values(sessions);
   const streaming = agents.filter((a) => a.status === "streaming").length;
@@ -86,6 +87,7 @@ export function useDeckStats() {
 
   return {
     gatewayConnected: connected,
+    gatewayPairingRequired: pairingRequired,
     totalAgents: agents.length,
     streaming,
     thinking,

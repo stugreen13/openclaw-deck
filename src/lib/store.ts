@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type {
   AgentConfig,
   AgentSession,
@@ -24,6 +25,7 @@ interface DeckStore {
   config: DeckConfig;
   sessions: Record<string, AgentSession>;
   gatewayConnected: boolean;
+  gatewayPairingRequired: boolean;
   columnOrder: string[];
   client: GatewayClient | null;
 
@@ -59,23 +61,54 @@ function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Reset transient runtime state on sessions restored from storage. */
+function rehydrateSession(session: AgentSession): AgentSession {
+  return {
+    ...session,
+    status: "idle",
+    activeRunId: null,
+    connected: false,
+    messages: session.messages.map((msg) =>
+      msg.streaming ? { ...msg, streaming: false } : msg
+    ),
+  };
+}
+
 // ─── Store ───
 
-export const useDeckStore = create<DeckStore>((set, get) => ({
+export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
   config: DEFAULT_CONFIG,
   sessions: {},
   gatewayConnected: false,
+  gatewayPairingRequired: false,
   columnOrder: [],
   client: null,
 
   initialize: (partialConfig) => {
-    const config = { ...DEFAULT_CONFIG, ...partialConfig };
+    const existingConfig = get().config;
+    const existingSessions = get().sessions;
+    const existingOrder = get().columnOrder;
+
+    // Use persisted agents/columns if they exist, otherwise fall back to defaults
+    const hasPersisted = existingOrder.length > 0 && Object.keys(existingSessions).length > 0;
+    const agents = hasPersisted ? existingConfig.agents : (partialConfig.agents ?? []);
+
+    const config: DeckConfig = {
+      ...DEFAULT_CONFIG,
+      ...partialConfig,
+      agents,
+    };
+
     const sessions: Record<string, AgentSession> = {};
-    const columnOrder: string[] = [];
+    const columnOrder = hasPersisted ? [...existingOrder] : [];
 
     for (const agent of config.agents) {
-      sessions[agent.id] = createSession(agent.id);
-      columnOrder.push(agent.id);
+      sessions[agent.id] = existingSessions[agent.id]
+        ? rehydrateSession(existingSessions[agent.id])
+        : createSession(agent.id);
+      if (!hasPersisted) {
+        columnOrder.push(agent.id);
+      }
     }
 
     // Create the gateway client
@@ -83,6 +116,9 @@ export const useDeckStore = create<DeckStore>((set, get) => ({
       url: config.gatewayUrl,
       token: config.token,
       onEvent: (event) => get().handleGatewayEvent(event),
+      onPairingRequired: (required) => {
+        set({ gatewayPairingRequired: required });
+      },
       onConnection: (connected) => {
         set({ gatewayConnected: connected });
         if (connected) {
@@ -422,4 +458,11 @@ export const useDeckStore = create<DeckStore>((set, get) => ({
     get().client?.disconnect();
     set({ gatewayConnected: false, client: null });
   },
+}), {
+  name: "openclaw-deck-store",
+  partialize: (state) => ({
+    sessions: state.sessions,
+    columnOrder: state.columnOrder,
+    config: state.config,
+  }),
 }));

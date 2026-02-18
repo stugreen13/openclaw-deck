@@ -37,6 +37,8 @@ interface GatewayClientOptions {
   onEvent?: EventHandler;
   /** Called when connection state changes */
   onConnection?: ConnectionHandler;
+  /** Called when the gateway requires device pairing approval */
+  onPairingRequired?: (required: boolean) => void;
   /** Max reconnection attempts (default: Infinity) */
   maxReconnectAttempts?: number;
   /** Base reconnect delay in ms (default: 1000) */
@@ -51,7 +53,7 @@ interface DeviceIdentityRecord {
   privateKeyJwk: JsonWebKey;
 }
 
-const OPERATOR_SCOPES = ["operator.read", "operator.write"];
+const OPERATOR_SCOPES = ["operator.read", "operator.write", "operator.pairing"];
 const DEVICE_IDENTITY_STORAGE_KEY = "openclaw.deck.deviceIdentity.v1";
 
 export class GatewayClient {
@@ -63,6 +65,8 @@ export class GatewayClient {
   private intentionalClose = false;
   private _connected = false;
   private msgCounter = 0;
+  private challengeNonce: string | null = null;
+  private challengeResolve: ((nonce: string) => void) | null = null;
 
   constructor(opts: GatewayClientOptions) {
     this.options = {
@@ -70,6 +74,7 @@ export class GatewayClient {
       token: opts.token ?? "",
       onEvent: opts.onEvent ?? (() => {}),
       onConnection: opts.onConnection ?? (() => {}),
+      onPairingRequired: opts.onPairingRequired ?? (() => {}),
       maxReconnectAttempts: opts.maxReconnectAttempts ?? Infinity,
       reconnectBaseDelay: opts.reconnectBaseDelay ?? 1000,
       requestTimeout: opts.requestTimeout ?? 30_000,
@@ -218,6 +223,10 @@ export class GatewayClient {
   // ─── Private ───
 
   private createSocket() {
+    // Reset challenge state for fresh handshake
+    this.challengeNonce = null;
+    this.challengeResolve = null;
+
     try {
       this.ws = new WebSocket(this.options.url);
     } catch (err) {
@@ -226,46 +235,9 @@ export class GatewayClient {
       return;
     }
 
-    this.ws.onopen = async () => {
-      console.log("[GatewayClient] Socket opened, sending handshake...");
-      try {
-        let device: { id: string; publicKey: string; signature: string; signedAt: number } | undefined;
-        try {
-          device = await this.buildSignedDeviceIdentity();
-        } catch (deviceErr) {
-          console.warn("[GatewayClient] Device identity unavailable; falling back to token-only auth:", deviceErr);
-        }
-
-        const hello = (await this.request("connect", {
-          client: {
-            id: "gateway-client",
-            version: "2026.2.16",
-            platform: "web",
-            mode: "webchat",
-          },
-          minProtocol: 3,
-          maxProtocol: 3,
-          role: "operator",
-          scopes: OPERATOR_SCOPES,
-          auth: this.getPreferredAuthToken()
-            ? { token: this.getPreferredAuthToken() }
-            : undefined,
-          ...(device ? { device } : {}),
-        })) as { auth?: { deviceToken?: string } };
-
-        const issuedDeviceToken = hello?.auth?.deviceToken;
-        if (issuedDeviceToken) {
-          this.storeDeviceToken(issuedDeviceToken);
-        }
-
-        this._connected = true;
-        this.reconnectAttempts = 0;
-        this.options.onConnection(true);
-        console.log("[GatewayClient] Connected to gateway");
-      } catch (err) {
-        console.error("[GatewayClient] Handshake failed:", err);
-        this.ws?.close(4001, "handshake failed");
-      }
+    this.ws.onopen = () => {
+      console.log("[GatewayClient] Socket opened, waiting for challenge...");
+      this.performHandshake();
     };
 
     this.ws.onmessage = (evt) => {
@@ -314,11 +286,85 @@ export class GatewayClient {
         break;
       }
       case "event": {
+        // Intercept the connect.challenge event for the handshake flow
+        if (frame.event === "connect.challenge" && this.challengeResolve) {
+          const nonce = (frame.payload as { nonce?: string })?.nonce;
+          if (nonce) {
+            this.challengeNonce = nonce;
+            this.challengeResolve(nonce);
+            this.challengeResolve = null;
+            break;
+          }
+        }
         this.options.onEvent(frame);
         break;
       }
       default:
         break;
+    }
+  }
+
+  private async performHandshake(): Promise<void> {
+    try {
+      const nonce = await this.waitForChallenge(10_000);
+      console.log("[GatewayClient] Challenge received, sending handshake...");
+
+      let device: { id: string; publicKey: string; signature: string; signedAt: number; nonce: string } | undefined;
+      try {
+        device = await this.buildSignedDeviceIdentity(nonce);
+      } catch (deviceErr) {
+        console.warn("[GatewayClient] Device identity unavailable; falling back to token-only auth:", deviceErr);
+      }
+
+      const hello = (await this.request("connect", {
+        client: {
+          id: "gateway-client",
+          version: "2026.2.16",
+          platform: "web",
+          mode: "webchat",
+        },
+        minProtocol: 3,
+        maxProtocol: 3,
+        role: "operator",
+        scopes: OPERATOR_SCOPES,
+        auth: this.getPreferredAuthToken()
+          ? { token: this.getPreferredAuthToken() }
+          : undefined,
+        ...(device ? { device } : {}),
+      })) as { auth?: { deviceToken?: string } };
+
+      const issuedDeviceToken = hello?.auth?.deviceToken;
+      if (issuedDeviceToken) {
+        this.storeDeviceToken(issuedDeviceToken);
+      }
+
+      this.options.onPairingRequired(false);
+      this._connected = true;
+      this.reconnectAttempts = 0;
+      this.options.onConnection(true);
+      console.log("[GatewayClient] Connected to gateway");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+
+      // "pairing required" means the device is pending approval on the gateway.
+      // Keep the socket open and wait for the server to send a new challenge
+      // after the operator approves the device.
+      if (message.includes("pairing required")) {
+        this.options.onPairingRequired(true);
+        console.log(
+          "[GatewayClient] Device pairing required — waiting for approval on the gateway. " +
+          "Approve this device, then the connection will complete automatically."
+        );
+        // Reset challenge state and recurse — waitForChallenge will block
+        // until the gateway sends a fresh connect.challenge after approval.
+        this.challengeNonce = null;
+        this.challengeResolve = null;
+        this.performHandshake();
+        return;
+      }
+
+      console.error("[GatewayClient] Handshake failed:", err);
+      this.ws?.close(4001, "handshake failed");
     }
   }
 
@@ -377,17 +423,39 @@ export class GatewayClient {
     return this.getStoredDeviceToken() || this.options.token || "";
   }
 
-  private async buildSignedDeviceIdentity(): Promise<{
+  private waitForChallenge(timeoutMs: number): Promise<string> {
+    // If we already received the challenge before this was called
+    if (this.challengeNonce) {
+      const nonce = this.challengeNonce;
+      this.challengeNonce = null;
+      return Promise.resolve(nonce);
+    }
+
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.challengeResolve = null;
+        reject(new Error("Timed out waiting for connect.challenge"));
+      }, timeoutMs);
+
+      this.challengeResolve = (nonce: string) => {
+        clearTimeout(timer);
+        resolve(nonce);
+      };
+    });
+  }
+
+  private async buildSignedDeviceIdentity(nonce: string): Promise<{
     id: string;
     publicKey: string;
     signature: string;
     signedAt: number;
+    nonce: string;
   }> {
     const identity = await this.loadOrCreateDeviceIdentity();
     const signedAt = Date.now();
 
     const payload = this.buildDeviceAuthPayload({
-      version: "v1",
+      version: "v2",
       deviceId: identity.id,
       clientId: "gateway-client",
       clientMode: "webchat",
@@ -395,6 +463,7 @@ export class GatewayClient {
       scopes: OPERATOR_SCOPES,
       signedAtMs: signedAt,
       token: this.getPreferredAuthToken() || null,
+      nonce,
     });
 
     const key = await crypto.subtle.importKey(
@@ -416,6 +485,7 @@ export class GatewayClient {
       publicKey: identity.publicKey,
       signature: this.base64UrlEncode(new Uint8Array(signature)),
       signedAt,
+      nonce,
     };
   }
 
