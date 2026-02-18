@@ -42,6 +42,7 @@ interface DeckStore {
   createAgentOnGateway: (agent: AgentConfig) => Promise<void>;
   deleteAgentOnGateway: (agentId: string) => Promise<void>;
   disconnect: () => void;
+  resetStore: () => void;
 }
 
 // ─── Helpers ───
@@ -457,6 +458,12 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
   disconnect: () => {
     get().client?.disconnect();
     set({ gatewayConnected: false, client: null });
+  },
+
+  resetStore: () => {
+    get().client?.disconnect();
+    localStorage.removeItem("openclaw-deck-store");
+    window.location.reload();
   },
 }), {
   name: "openclaw-deck-store",

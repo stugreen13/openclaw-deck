@@ -5,6 +5,7 @@ import styles from "./StatusBar.module.css";
 export function StatusBar() {
   const stats = useDeckStats();
   const gatewayUrl = useDeckStore((s) => s.config.gatewayUrl);
+  const resetStore = useDeckStore((s) => s.resetStore);
 
   return (
     <div className={styles.bar}>
@@ -37,6 +38,9 @@ export function StatusBar() {
         {stats.errors > 0 && <> · <span className={styles.error}>{stats.errors} {stats.errors === 1 ? "error" : "errors"}</span></>}
       </span>
       <span className={styles.spacer} />
+      <button className={styles.resetBtn} onClick={resetStore}>
+        Reset
+      </button>
       <span>openclaw-deck v2026.2.9</span>
     </div>
   );
