@@ -24,12 +24,6 @@ interface ServerSession {
   title?: string;
 }
 
-interface ModelInfo {
-  id: string;
-  name: string;
-  provider: string;
-}
-
 export function NewSessionModal({
   onClose,
   onCreate,
@@ -40,14 +34,12 @@ export function NewSessionModal({
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("");
   const [accent, setAccent] = useState(ACCENTS[1]);
-  const [model, setModel] = useState("");
   const [agentId, setAgentId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Server-driven data
   const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [models, setModels] = useState<ModelInfo[]>([]);
   const [serverSessions, setServerSessions] = useState<ServerSession[]>([]);
   const [selectedSessionKey, setSelectedSessionKey] = useState<string>("__new__");
   const [newSessionName, setNewSessionName] = useState("");
@@ -65,10 +57,7 @@ export function NewSessionModal({
 
     (async () => {
       try {
-        const [agentsResult, modelsResult] = await Promise.all([
-          client.client.listAgents(),
-          client.client.listModels(),
-        ]);
+        const agentsResult = await client.client.listAgents();
 
         if (cancelled) return;
 
@@ -80,16 +69,6 @@ export function NewSessionModal({
         );
         setAgents(agentList);
         setAgentId(agentsResult.defaultId ?? agentList[0]?.id ?? "main");
-
-        const modelList: ModelInfo[] = (modelsResult.models ?? [])
-          .filter((m) => m.provider === "vercel-ai-gateway")
-          .map((m) => ({
-            id: m.id,
-            name: m.name,
-            provider: m.provider,
-          }));
-        setModels(modelList);
-        if (modelList.length > 0) setModel(modelList[0].id);
       } catch (err) {
         console.warn("[NewSessionModal] Failed to fetch server data:", err);
       } finally {

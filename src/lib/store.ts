@@ -42,6 +42,8 @@ interface DeckStore {
   handleGatewayEvent: (event: GatewayEvent) => void;
   createSessionOnGateway: (session: SessionConfig) => Promise<void>;
   deleteSessionOnGateway: (sessionId: string) => Promise<void>;
+  loadChatHistory: (sessionId: string) => Promise<void>;
+  loadAllChatHistory: () => Promise<void>;
   disconnect: () => void;
   resetStore: () => void;
 }
@@ -61,6 +63,25 @@ function createSession(sessionId: string): Session {
 
 function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Normalize message content to a plain string (handles content block arrays). */
+function extractText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((block: any) => {
+        if (typeof block === "string") return block;
+        if (block?.type === "text") return block.text ?? "";
+        return "";
+      })
+      .join("");
+  }
+  if (content && typeof content === "object") {
+    const obj = content as Record<string, unknown>;
+    if (typeof obj.text === "string") return obj.text;
+  }
+  return String(content ?? "");
 }
 
 /** Resolve a sessionKey like "agent:<gwAgentId>:<sessionPart>" to the local column ID. */
@@ -83,19 +104,6 @@ function resolveColumnId(
   return match?.id ?? gwAgentId;
 }
 
-/** Reset transient runtime state on sessions restored from storage. */
-function rehydrateSession(session: Session): Session {
-  return {
-    ...session,
-    status: "idle",
-    activeRunId: null,
-    connected: false,
-    messages: session.messages.map((msg) =>
-      msg.streaming ? { ...msg, streaming: false } : msg
-    ),
-  };
-}
-
 // ─── Store ───
 
 export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
@@ -108,11 +116,10 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
 
   initialize: (partialConfig) => {
     const existingConfig = get().config;
-    const existingSessions = get().sessions;
     const existingOrder = get().columnOrder;
 
-    // Use persisted sessions/columns if they exist, otherwise fall back to defaults
-    const hasPersisted = existingOrder.length > 0 && Object.keys(existingSessions).length > 0;
+    // Use persisted column config if it exists, otherwise fall back to defaults
+    const hasPersisted = existingOrder.length > 0;
     const sessionConfigs = hasPersisted ? existingConfig.sessions : (partialConfig.sessions ?? []);
 
     const config: DeckConfig = {
@@ -121,13 +128,12 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       sessions: sessionConfigs,
     };
 
+    // Always start with fresh (empty) sessions — history is loaded from server on connect
     const sessions: Record<string, Session> = {};
     const columnOrder = hasPersisted ? [...existingOrder] : [];
 
     for (const sessionConfig of config.sessions) {
-      sessions[sessionConfig.id] = existingSessions[sessionConfig.id]
-        ? rehydrateSession(existingSessions[sessionConfig.id])
-        : createSession(sessionConfig.id);
+      sessions[sessionConfig.id] = createSession(sessionConfig.id);
       if (!hasPersisted) {
         columnOrder.push(sessionConfig.id);
       }
@@ -150,6 +156,8 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
             sessions[id] = { ...sessions[id], connected: true };
           }
           set({ sessions });
+          // Fetch chat history from server for all sessions
+          get().loadAllChatHistory();
         }
       },
     });
@@ -462,9 +470,11 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
   },
 
   createSessionOnGateway: async (sessionConfig) => {
-    // If the user picked an existing server session, no server call needed.
-    // Just add the column locally.
+    // Add the column locally, then load chat history from server
     get().addSession(sessionConfig);
+    if (sessionConfig.sessionKey) {
+      await get().loadChatHistory(sessionConfig.id);
+    }
   },
 
   deleteSessionOnGateway: async (sessionId) => {
@@ -477,6 +487,53 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       console.warn("[DeckStore] Gateway deleteAgent failed, removing locally:", err);
     }
     get().removeSession(sessionId);
+  },
+
+  loadChatHistory: async (sessionId) => {
+    const { client, config } = get();
+    if (!client?.connected) return;
+
+    const sessionConfig = config.sessions.find((s) => s.id === sessionId);
+    if (!sessionConfig) return;
+
+    const gwAgent = sessionConfig.agentId ?? "main";
+    const sessionKey = sessionConfig.sessionKey ?? `agent:${gwAgent}:${sessionId}`;
+
+    try {
+      const result = await client.client.getChatHistory({ sessionKey, limit: 10 });
+      const rawMessages: unknown[] = result?.messages ?? result ?? [];
+
+      const messages: ChatMessage[] = rawMessages.map((m: any) => ({
+        id: m.id ?? makeId(),
+        role: m.role ?? "assistant",
+        text: extractText(m.text ?? m.content ?? ""),
+        timestamp: m.timestamp ?? (m.createdAt ? new Date(m.createdAt).getTime() : Date.now()),
+        streaming: false,
+      }));
+
+      set((state) => {
+        const session = state.sessions[sessionId];
+        if (!session) return state;
+        return {
+          sessions: {
+            ...state.sessions,
+            [sessionId]: {
+              ...session,
+              messages,
+            },
+          },
+        };
+      });
+    } catch (err) {
+      console.warn(`[DeckStore] Failed to load chat history for ${sessionId}:`, err);
+    }
+  },
+
+  loadAllChatHistory: async () => {
+    const { config } = get();
+    await Promise.all(
+      config.sessions.map((s) => get().loadChatHistory(s.id))
+    );
   },
 
   disconnect: () => {
@@ -492,7 +549,6 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
 }), {
   name: "openclaw-deck-store",
   partialize: (state) => ({
-    sessions: state.sessions,
     columnOrder: state.columnOrder,
     config: state.config,
   }),

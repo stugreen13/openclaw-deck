@@ -39,8 +39,8 @@ const SESSION_ACCENTS = [
 ];
 
 const DEFAULT_SESSIONS: Partial<SessionConfig>[] = [
-  { name: "Cass" },
-  { name: "TieoutTR", agentId: "tieouttr" },
+  { name: "Cass", agentId: "main", sessionKey: "agent:main:main" },
+  { name: "TieoutTR", agentId: "tieouttr", sessionKey: "agent:tieouttr:main" },
 ];
 
 function buildDefaultSessions(count: number): SessionConfig[] {
@@ -51,6 +51,7 @@ function buildDefaultSessions(count: number): SessionConfig[] {
     accent: SESSION_ACCENTS[i % SESSION_ACCENTS.length],
     model: "claude-sonnet-4-5",
     agentId: DEFAULT_SESSIONS[i]?.agentId,
+    sessionKey: DEFAULT_SESSIONS[i]?.sessionKey,
   }));
 }
 
