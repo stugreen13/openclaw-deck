@@ -43,7 +43,7 @@
   background: rgba(255, 255, 255, 0.07);
 }
 
-.agentIcon {
+.sessionIcon {
   width: 32px;
   height: 32px;
   border-radius: 8px;
@@ -66,7 +66,7 @@
   gap: 8px;
 }
 
-.agentName {
+.sessionName {
   font-size: 14px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);

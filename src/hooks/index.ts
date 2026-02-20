@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useDeckStore } from "../lib/store";
-import type { AgentConfig, DeckConfig } from "../types";
+import type { SessionConfig, DeckConfig } from "../types";
 
 /**
  * Initialize the deck with config. Call once at app root.
@@ -23,27 +23,27 @@ export function useDeckInit(config: Partial<DeckConfig>) {
 }
 
 /**
- * Get session data for a specific agent.
+ * Get session data for a specific session.
  */
-export function useAgentSession(agentId: string) {
-  return useDeckStore((s) => s.sessions[agentId]);
+export function useSession(sessionId: string) {
+  return useDeckStore((s) => s.sessions[sessionId]);
 }
 
 /**
- * Get the agent config by ID.
+ * Get the session config by ID.
  */
-export function useAgentConfig(agentId: string): AgentConfig | undefined {
-  return useDeckStore((s) => s.config.agents.find((a) => a.id === agentId));
+export function useSessionConfig(sessionId: string): SessionConfig | undefined {
+  return useDeckStore((s) => s.config.sessions.find((a) => a.id === sessionId));
 }
 
 /**
- * Send a message to an agent. Returns a stable callback.
+ * Send a message to a session. Returns a stable callback.
  */
-export function useSendMessage(agentId: string) {
+export function useSendMessage(sessionId: string) {
   const sendMessage = useDeckStore((s) => s.sendMessage);
   return useCallback(
-    (text: string) => sendMessage(agentId, text),
-    [agentId, sendMessage]
+    (text: string) => sendMessage(sessionId, text),
+    [sessionId, sendMessage]
   );
 }
 
@@ -71,15 +71,15 @@ export function useDeckStats() {
   const connected = useDeckStore((s) => s.gatewayConnected);
   const pairingRequired = useDeckStore((s) => s.gatewayPairingRequired);
 
-  const agents = Object.values(sessions);
-  const streaming = agents.filter((a) => a.status === "streaming").length;
-  const thinking = agents.filter((a) => a.status === "thinking").length;
-  const errors = agents.filter((a) => a.status === "error").length;
-  const totalTokens = agents.reduce(
+  const allSessions = Object.values(sessions);
+  const streaming = allSessions.filter((a) => a.status === "streaming").length;
+  const thinking = allSessions.filter((a) => a.status === "thinking").length;
+  const errors = allSessions.filter((a) => a.status === "error").length;
+  const totalTokens = allSessions.reduce(
     (sum, a) => sum + (a.usage?.totalTokens ?? a.tokenCount),
     0
   );
-  const waitingForUser = agents.filter((a) => {
+  const waitingForUser = allSessions.filter((a) => {
     if (a.status !== "idle" || a.messages.length === 0) return false;
     const last = a.messages[a.messages.length - 1];
     return last.role === "assistant" && !last.streaming;
@@ -88,11 +88,11 @@ export function useDeckStats() {
   return {
     gatewayConnected: connected,
     gatewayPairingRequired: pairingRequired,
-    totalAgents: agents.length,
+    totalSessions: allSessions.length,
     streaming,
     thinking,
     active: streaming + thinking,
-    idle: agents.length - streaming - thinking,
+    idle: allSessions.length - streaming - thinking,
     errors,
     totalTokens,
     waitingForUser,

@@ -2,9 +2,9 @@
 
 export type { EventFrame as GatewayEvent } from "openclaw-client";
 
-// ─── Agent Types ───
+// ─── Session Types ───
 
-export type AgentStatus =
+export type SessionStatus =
   | "idle"
   | "streaming"
   | "thinking"
@@ -12,21 +12,21 @@ export type AgentStatus =
   | "error"
   | "disconnected";
 
-export interface AgentConfig {
+export interface SessionConfig {
   id: string;
   name: string;
   icon: string;
   accent: string;
   /** Path to agent workspace (maps to OpenClaw agent config) */
   workspace?: string;
-  /** Model override for this agent */
+  /** Model override for this session */
   model?: string;
-  /** Short description of agent's role */
+  /** Short description of session's role */
   context: string;
   /** Agent envelope runtime shell (#1835) */
   shell?: string;
   /** Gateway agent to route messages to (defaults to "main") */
-  gatewayAgentId?: string;
+  agentId?: string;
 }
 
 export interface ChatMessage {
@@ -66,15 +66,15 @@ export interface SessionUsage {
   };
 }
 
-export interface AgentSession {
-  agentId: string;
-  status: AgentStatus;
+export interface Session {
+  sessionId: string;
+  status: SessionStatus;
   messages: ChatMessage[];
   /** Current streaming run ID */
   activeRunId: string | null;
   /** Token count for this session */
   tokenCount: number;
-  /** Whether the WS connection to this agent's session is live */
+  /** Whether the WS connection to this session is live */
   connected: boolean;
   /** Real usage data from gateway */
   usage?: SessionUsage;
@@ -87,17 +87,17 @@ export interface DeckConfig {
   gatewayUrl: string;
   /** Gateway auth token (from OPENCLAW_GATEWAY_TOKEN) */
   token?: string;
-  /** Agent definitions */
-  agents: AgentConfig[];
+  /** Session definitions */
+  sessions: SessionConfig[];
 }
 
 // ─── Store Types ───
 
 export interface DeckState {
   config: DeckConfig;
-  sessions: Record<string, AgentSession>;
+  sessions: Record<string, Session>;
   /** Global connection status to gateway */
   gatewayConnected: boolean;
-  /** Column ordering (agent IDs) */
+  /** Column ordering (session IDs) */
   columnOrder: string[];
 }

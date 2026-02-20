@@ -33,7 +33,7 @@ export function StatusBar() {
       </span>
       <span className={styles.sep}>·</span>
       <span>
-        {stats.totalAgents} agents · {stats.active} active
+        {stats.totalSessions} sessions · {stats.active} active
         {stats.waitingForUser > 0 && <> · {stats.waitingForUser} waiting</>}
         {stats.errors > 0 && <> · <span className={styles.error}>{stats.errors} {stats.errors === 1 ? "error" : "errors"}</span></>}
       </span>

@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type {
-  AgentConfig,
-  AgentSession,
-  AgentStatus,
+  SessionConfig,
+  Session,
+  SessionStatus,
   ChatMessage,
   DeckConfig,
   GatewayEvent,
@@ -16,14 +16,14 @@ import { GatewayConnection } from "./gateway-wrapper";
 const DEFAULT_CONFIG: DeckConfig = {
   gatewayUrl: "ws://127.0.0.1:18789",
   token: undefined,
-  agents: [],
+  sessions: [],
 };
 
 // ─── Store Shape ───
 
 interface DeckStore {
   config: DeckConfig;
-  sessions: Record<string, AgentSession>;
+  sessions: Record<string, Session>;
   gatewayConnected: boolean;
   gatewayPairingRequired: boolean;
   columnOrder: string[];
@@ -31,26 +31,26 @@ interface DeckStore {
 
   // Actions
   initialize: (config: Partial<DeckConfig>) => void;
-  addAgent: (agent: AgentConfig) => void;
-  removeAgent: (agentId: string) => void;
-  updateAgentName: (agentId: string, name: string) => void;
+  addSession: (session: SessionConfig) => void;
+  removeSession: (sessionId: string) => void;
+  updateSessionName: (sessionId: string, name: string) => void;
   reorderColumns: (order: string[]) => void;
-  sendMessage: (agentId: string, text: string) => Promise<void>;
-  setAgentStatus: (agentId: string, status: AgentStatus) => void;
-  appendMessageChunk: (agentId: string, runId: string, chunk: string) => void;
-  finalizeMessage: (agentId: string, runId: string) => void;
+  sendMessage: (sessionId: string, text: string) => Promise<void>;
+  setSessionStatus: (sessionId: string, status: SessionStatus) => void;
+  appendMessageChunk: (sessionId: string, runId: string, chunk: string) => void;
+  finalizeMessage: (sessionId: string, runId: string) => void;
   handleGatewayEvent: (event: GatewayEvent) => void;
-  createAgentOnGateway: (agent: AgentConfig) => Promise<void>;
-  deleteAgentOnGateway: (agentId: string) => Promise<void>;
+  createSessionOnGateway: (session: SessionConfig) => Promise<void>;
+  deleteSessionOnGateway: (sessionId: string) => Promise<void>;
   disconnect: () => void;
   resetStore: () => void;
 }
 
 // ─── Helpers ───
 
-function createSession(agentId: string): AgentSession {
+function createSession(sessionId: string): Session {
   return {
-    agentId,
+    sessionId,
     status: "idle",
     messages: [],
     activeRunId: null,
@@ -63,8 +63,21 @@ function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Resolve a sessionKey like "agent:<gwAgentId>:main" to the local column ID. */
+function resolveColumnId(
+  sessionKey: string | undefined,
+  sessions: SessionConfig[]
+): string {
+  const parts = sessionKey?.split(":") ?? [];
+  const gwAgentId = parts[1] ?? "main";
+  const match = sessions.find(
+    (a) => (a.agentId ?? "main") === gwAgentId
+  );
+  return match?.id ?? gwAgentId;
+}
+
 /** Reset transient runtime state on sessions restored from storage. */
-function rehydrateSession(session: AgentSession): AgentSession {
+function rehydrateSession(session: Session): Session {
   return {
     ...session,
     status: "idle",
@@ -91,25 +104,25 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
     const existingSessions = get().sessions;
     const existingOrder = get().columnOrder;
 
-    // Use persisted agents/columns if they exist, otherwise fall back to defaults
+    // Use persisted sessions/columns if they exist, otherwise fall back to defaults
     const hasPersisted = existingOrder.length > 0 && Object.keys(existingSessions).length > 0;
-    const agents = hasPersisted ? existingConfig.agents : (partialConfig.agents ?? []);
+    const sessionConfigs = hasPersisted ? existingConfig.sessions : (partialConfig.sessions ?? []);
 
     const config: DeckConfig = {
       ...DEFAULT_CONFIG,
       ...partialConfig,
-      agents,
+      sessions: sessionConfigs,
     };
 
-    const sessions: Record<string, AgentSession> = {};
+    const sessions: Record<string, Session> = {};
     const columnOrder = hasPersisted ? [...existingOrder] : [];
 
-    for (const agent of config.agents) {
-      sessions[agent.id] = existingSessions[agent.id]
-        ? rehydrateSession(existingSessions[agent.id])
-        : createSession(agent.id);
+    for (const sessionConfig of config.sessions) {
+      sessions[sessionConfig.id] = existingSessions[sessionConfig.id]
+        ? rehydrateSession(existingSessions[sessionConfig.id])
+        : createSession(sessionConfig.id);
       if (!hasPersisted) {
-        columnOrder.push(agent.id);
+        columnOrder.push(sessionConfig.id);
       }
     }
 
@@ -124,7 +137,7 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       onConnection: (connected) => {
         set({ gatewayConnected: connected });
         if (connected) {
-          // Mark all agent sessions as connected
+          // Mark all sessions as connected
           const sessions = { ...get().sessions };
           for (const id of Object.keys(sessions)) {
             sessions[id] = { ...sessions[id], connected: true };
@@ -138,40 +151,40 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
     client.connect();
   },
 
-  addAgent: (agent) => {
+  addSession: (sessionConfig) => {
     set((state) => ({
       config: {
         ...state.config,
-        agents: [...state.config.agents, agent],
+        sessions: [...state.config.sessions, sessionConfig],
       },
       sessions: {
         ...state.sessions,
-        [agent.id]: createSession(agent.id),
+        [sessionConfig.id]: createSession(sessionConfig.id),
       },
-      columnOrder: [...state.columnOrder, agent.id],
+      columnOrder: [...state.columnOrder, sessionConfig.id],
     }));
   },
 
-  removeAgent: (agentId) => {
+  removeSession: (sessionId) => {
     set((state) => {
-      const { [agentId]: _, ...sessions } = state.sessions;
+      const { [sessionId]: _, ...sessions } = state.sessions;
       return {
         config: {
           ...state.config,
-          agents: state.config.agents.filter((a) => a.id !== agentId),
+          sessions: state.config.sessions.filter((a) => a.id !== sessionId),
         },
         sessions,
-        columnOrder: state.columnOrder.filter((id) => id !== agentId),
+        columnOrder: state.columnOrder.filter((id) => id !== sessionId),
       };
     });
   },
 
-  updateAgentName: (agentId, name) => {
+  updateSessionName: (sessionId, name) => {
     set((state) => ({
       config: {
         ...state.config,
-        agents: state.config.agents.map((a) =>
-          a.id === agentId ? { ...a, name } : a
+        sessions: state.config.sessions.map((a) =>
+          a.id === sessionId ? { ...a, name } : a
         ),
       },
     }));
@@ -179,7 +192,7 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
 
   reorderColumns: (order) => set({ columnOrder: order }),
 
-  sendMessage: async (agentId, text) => {
+  sendMessage: async (sessionId, text) => {
     const { client, sessions } = get();
     if (!client?.connected) {
       console.error("Gateway not connected");
@@ -194,13 +207,13 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       timestamp: Date.now(),
     };
 
-    const session = sessions[agentId];
+    const session = sessions[sessionId];
     if (!session) return;
 
     set((state) => ({
       sessions: {
         ...state.sessions,
-        [agentId]: {
+        [sessionId]: {
           ...session,
           messages: [...session.messages, userMsg],
           status: "thinking",
@@ -209,11 +222,11 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
     }));
 
     try {
-      // Route through the agent's configured gateway agent (default "main"),
+      // Route through the session's configured gateway agent (default "main"),
       // using distinct session keys to keep conversations separate.
-      const agentConfig = get().config.agents.find((a) => a.id === agentId);
-      const gwAgent = agentConfig?.gatewayAgentId ?? "main";
-      const sessionKey = `agent:${gwAgent}:${agentId}`;
+      const sessionConfig = get().config.sessions.find((a) => a.id === sessionId);
+      const gwAgent = sessionConfig?.agentId ?? "main";
+      const sessionKey = `agent:${gwAgent}:main`;
       const idempotencyKey = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const { runId } = await client.client.sendToAgent({
         agentId: gwAgent,
@@ -235,21 +248,21 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       set((state) => ({
         sessions: {
           ...state.sessions,
-          [agentId]: {
-            ...state.sessions[agentId],
-            messages: [...state.sessions[agentId].messages, assistantMsg],
+          [sessionId]: {
+            ...state.sessions[sessionId],
+            messages: [...state.sessions[sessionId].messages, assistantMsg],
             activeRunId: runId,
             status: "streaming",
           },
         },
       }));
     } catch (err) {
-      console.error(`Failed to run agent ${agentId}:`, err);
+      console.error(`Failed to run session ${sessionId}:`, err);
       set((state) => ({
         sessions: {
           ...state.sessions,
-          [agentId]: {
-            ...state.sessions[agentId],
+          [sessionId]: {
+            ...state.sessions[sessionId],
             status: "error",
           },
         },
@@ -257,21 +270,21 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
     }
   },
 
-  setAgentStatus: (agentId, status) => {
+  setSessionStatus: (sessionId, status) => {
     set((state) => ({
       sessions: {
         ...state.sessions,
-        [agentId]: {
-          ...state.sessions[agentId],
+        [sessionId]: {
+          ...state.sessions[sessionId],
           status,
         },
       },
     }));
   },
 
-  appendMessageChunk: (agentId, runId, chunk) => {
+  appendMessageChunk: (sessionId, runId, chunk) => {
     set((state) => {
-      const session = state.sessions[agentId];
+      const session = state.sessions[sessionId];
       if (!session) return state;
 
       const messages = session.messages.map((msg) => {
@@ -284,7 +297,7 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       return {
         sessions: {
           ...state.sessions,
-          [agentId]: {
+          [sessionId]: {
             ...session,
             messages,
             tokenCount: session.tokenCount + chunk.length, // approximate
@@ -294,9 +307,9 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
     });
   },
 
-  finalizeMessage: (agentId, runId) => {
+  finalizeMessage: (sessionId, runId) => {
     set((state) => {
-      const session = state.sessions[agentId];
+      const session = state.sessions[sessionId];
       if (!session) return state;
 
       const messages = session.messages.map((msg) => {
@@ -309,7 +322,7 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       return {
         sessions: {
           ...state.sessions,
-          [agentId]: {
+          [sessionId]: {
             ...session,
             messages,
             activeRunId: null,
@@ -325,29 +338,27 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
 
     switch (event.event) {
       // Agent streaming events
-      // Format: { runId, stream: "assistant"|"lifecycle"|"tool_use", data: {...}, sessionKey: "agent:<id>:<key>" }
+      // Format: { runId, stream: "assistant"|"lifecycle"|"tool_use", data: {...}, sessionKey: "agent:<gwAgentId>:main" }
       case "agent": {
         const runId = payload.runId as string;
         const stream = payload.stream as string | undefined;
         const data = payload.data as Record<string, unknown> | undefined;
         const sessionKey = payload.sessionKey as string | undefined;
 
-        // Extract column ID from sessionKey "agent:main:<columnId>"
-        const parts = sessionKey?.split(":") ?? [];
-        const agentId = parts[2] ?? parts[1] ?? "main";
+        const sessionId = resolveColumnId(sessionKey, get().config.sessions);
 
         if (stream === "assistant" && data?.delta) {
-          get().appendMessageChunk(agentId, runId, data.delta as string);
-          get().setAgentStatus(agentId, "streaming");
+          get().appendMessageChunk(sessionId, runId, data.delta as string);
+          get().setSessionStatus(sessionId, "streaming");
         } else if (stream === "lifecycle") {
           const phase = data?.phase as string | undefined;
           if (phase === "start") {
-            get().setAgentStatus(agentId, "thinking");
+            get().setSessionStatus(sessionId, "thinking");
           } else if (phase === "end") {
-            get().finalizeMessage(agentId, runId);
+            get().finalizeMessage(sessionId, runId);
           }
         } else if (stream === "tool_use") {
-          get().setAgentStatus(agentId, "tool_use");
+          get().setSessionStatus(sessionId, "tool_use");
         }
         break;
       }
@@ -384,8 +395,7 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       // Context compaction dividers
       case "compaction": {
         const sessionKey = payload.sessionKey as string | undefined;
-        const parts = sessionKey?.split(":") ?? [];
-        const agentId = parts[2] ?? parts[1] ?? "main";
+        const sessionId = resolveColumnId(sessionKey, get().config.sessions);
         const beforeTokens = (payload.beforeTokens as number) ?? 0;
         const afterTokens = (payload.afterTokens as number) ?? 0;
         const droppedMessages = (payload.droppedMessages as number) ?? 0;
@@ -399,12 +409,12 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
         };
 
         set((state) => {
-          const session = state.sessions[agentId];
+          const session = state.sessions[sessionId];
           if (!session) return state;
           return {
             sessions: {
               ...state.sessions,
-              [agentId]: {
+              [sessionId]: {
                 ...session,
                 messages: [...session.messages, compactionMsg],
               },
@@ -417,18 +427,17 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       // Real usage data from gateway
       case "sessions.usage": {
         const sessionKey = payload.sessionKey as string | undefined;
-        const parts = sessionKey?.split(":") ?? [];
-        const agentId = parts[2] ?? parts[1] ?? "main";
+        const sessionId = resolveColumnId(sessionKey, get().config.sessions);
         const usage = payload.usage as SessionUsage | undefined;
 
         if (usage) {
           set((state) => {
-            const session = state.sessions[agentId];
+            const session = state.sessions[sessionId];
             if (!session) return state;
             return {
               sessions: {
                 ...state.sessions,
-                [agentId]: {
+                [sessionId]: {
                   ...session,
                   usage,
                   tokenCount: usage.totalTokens,
@@ -445,34 +454,34 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
     }
   },
 
-  createAgentOnGateway: async (agent) => {
+  createSessionOnGateway: async (sessionConfig) => {
     const { client } = get();
     try {
       if (client?.connected) {
         await client.client.call("agents.create", {
-          id: agent.id,
-          name: agent.name,
-          model: agent.model,
-          context: agent.context,
-          shell: agent.shell,
+          id: sessionConfig.id,
+          name: sessionConfig.name,
+          model: sessionConfig.model,
+          context: sessionConfig.context,
+          shell: sessionConfig.shell,
         });
       }
     } catch (err) {
       console.warn("[DeckStore] Gateway createAgent failed, adding locally:", err);
     }
-    get().addAgent(agent);
+    get().addSession(sessionConfig);
   },
 
-  deleteAgentOnGateway: async (agentId) => {
+  deleteSessionOnGateway: async (sessionId) => {
     const { client } = get();
     try {
       if (client?.connected) {
-        await client.client.deleteAgent({ agentId });
+        await client.client.deleteAgent({ agentId: sessionId });
       }
     } catch (err) {
       console.warn("[DeckStore] Gateway deleteAgent failed, removing locally:", err);
     }
-    get().removeAgent(agentId);
+    get().removeSession(sessionId);
   },
 
   disconnect: () => {

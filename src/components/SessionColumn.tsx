@@ -4,14 +4,14 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github-dark.css";
 import {
-  useAgentSession,
-  useAgentConfig,
+  useSession,
+  useSessionConfig,
   useSendMessage,
   useAutoScroll,
 } from "../hooks";
 import { useDeckStore } from "../lib/store";
-import type { AgentStatus, ChatMessage, AgentSession } from "../types";
-import styles from "./AgentColumn.module.css";
+import type { SessionStatus, ChatMessage, Session } from "../types";
+import styles from "./SessionColumn.module.css";
 
 // ─── Status Indicator ───
 
@@ -19,7 +19,7 @@ function StatusBadge({
   status,
   accent,
 }: {
-  status: AgentStatus;
+  status: SessionStatus;
   accent: string;
 }) {
   const color =
@@ -140,7 +140,7 @@ function CompactionDivider({ message }: { message: ChatMessage }) {
 
 // ─── Failover Badge ───
 
-function FailoverBadge({ session }: { session: AgentSession }) {
+function FailoverBadge({ session }: { session: Session }) {
   const failover = session.usage?.failover;
   if (!failover) return null;
 
@@ -153,12 +153,12 @@ function FailoverBadge({ session }: { session: AgentSession }) {
 
 // ─── Main Column ───
 
-export function AgentColumn({ agentId, columnIndex }: { agentId: string; columnIndex: number }) {
-  const session = useAgentSession(agentId);
-  const config = useAgentConfig(agentId);
-  const send = useSendMessage(agentId);
-  const deleteAgentOnGateway = useDeckStore((s) => s.deleteAgentOnGateway);
-  const updateAgentName = useDeckStore((s) => s.updateAgentName);
+export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; columnIndex: number }) {
+  const session = useSession(sessionId);
+  const config = useSessionConfig(sessionId);
+  const send = useSendMessage(sessionId);
+  const deleteSessionOnGateway = useDeckStore((s) => s.deleteSessionOnGateway);
+  const updateSessionName = useDeckStore((s) => s.updateSessionName);
   const [input, setInput] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -195,24 +195,24 @@ export function AgentColumn({ agentId, columnIndex }: { agentId: string; columnI
     session.status === "thinking" ||
     session.status === "tool_use";
 
-  // Determine if agent has completed work ready to review
+  // Determine if session has completed work ready to review
   const lastMessage = session.messages[session.messages.length - 1];
-  const hasCompletedWork = 
+  const hasCompletedWork =
     session.status === "idle" &&
     session.messages.length > 0 &&
     lastMessage?.role === "assistant" &&
     !lastMessage?.streaming;
 
   return (
-    <div 
-      className={styles.column} 
+    <div
+      className={styles.column}
       data-status={session.status}
       data-has-completed-work={hasCompletedWork}
     >
       {/* Header */}
       <div className={styles.header}>
         <div
-          className={styles.agentIcon}
+          className={styles.sessionIcon}
           style={{
             color: config.accent,
             backgroundColor: `${config.accent}15`,
@@ -223,14 +223,14 @@ export function AgentColumn({ agentId, columnIndex }: { agentId: string; columnI
         </div>
         <div className={styles.headerInfo}>
           <div className={styles.headerRow}>
-            <span className={styles.agentName}>{config.name}</span>
+            <span className={styles.sessionName}>{config.name}</span>
             <StatusBadge status={session.status} accent={config.accent} />
           </div>
           <div className={styles.headerMeta}>
             {config.context ? <span>{config.context}</span> : null}
             {config.context ? <span className={styles.metaDot}>·</span> : null}
             <span style={{ color: config.accent, opacity: 0.5 }}>
-              {`agent:${config.gatewayAgentId ?? "main"}:${agentId}`}
+              {`agent:${config.agentId ?? "main"}:${sessionId}`}
             </span>
             <FailoverBadge session={session} />
           </div>
@@ -257,7 +257,7 @@ export function AgentColumn({ agentId, columnIndex }: { agentId: string; columnI
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       const trimmed = editName.trim();
-                      if (trimmed) updateAgentName(agentId, trimmed);
+                      if (trimmed) updateSessionName(sessionId, trimmed);
                       setShowSettings(false);
                     }
                     if (e.key === "Escape") setShowSettings(false);
@@ -268,7 +268,7 @@ export function AgentColumn({ agentId, columnIndex }: { agentId: string; columnI
                   className={styles.settingsSave}
                   onClick={() => {
                     const trimmed = editName.trim();
-                    if (trimmed) updateAgentName(agentId, trimmed);
+                    if (trimmed) updateSessionName(sessionId, trimmed);
                     setShowSettings(false);
                   }}
                 >
@@ -279,10 +279,10 @@ export function AgentColumn({ agentId, columnIndex }: { agentId: string; columnI
           </div>
           <button
             className={`${styles.deleteBtn} ${confirmDelete ? styles.confirmDelete : ""}`}
-            title={confirmDelete ? "Click again to confirm" : "Delete agent"}
+            title={confirmDelete ? "Click again to confirm" : "Delete session"}
             onClick={() => {
               if (confirmDelete) {
-                deleteAgentOnGateway(agentId);
+                deleteSessionOnGateway(sessionId);
               } else {
                 setConfirmDelete(true);
                 setTimeout(() => setConfirmDelete(false), 3000);

@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
-import type { AgentConfig } from "../types";
-import styles from "./AddAgentModal.module.css";
+import type { SessionConfig } from "../types";
+import styles from "./NewSessionModal.module.css";
 
 const ACCENTS = [
   "#22d3ee", // cyan
@@ -20,19 +20,19 @@ const MODELS = [
 
 const GATEWAY_AGENTS = ["main", "tieouttr"];
 
-export function AddAgentModal({
+export function NewSessionModal({
   onClose,
   onCreate,
 }: {
   onClose: () => void;
-  onCreate: (agent: AgentConfig) => Promise<void>;
+  onCreate: (session: SessionConfig) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("");
   const [accent, setAccent] = useState(ACCENTS[1]);
   const [context, setContext] = useState("");
   const [model, setModel] = useState(MODELS[0]);
-  const [gatewayAgentId, setGatewayAgentId] = useState(GATEWAY_AGENTS[0]);
+  const [agentId, setAgentId] = useState(GATEWAY_AGENTS[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,17 +49,17 @@ export function AddAgentModal({
     setError(null);
     try {
       await onCreate({
-        id: id || `agent-${Date.now()}`,
+        id: id || `session-${Date.now()}`,
         name: name.trim(),
         icon: icon || name.trim()[0]?.toUpperCase() || "?",
         accent,
         context: context.trim() || name.trim(),
         model,
-        gatewayAgentId,
+        agentId,
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create agent");
+      setError(err instanceof Error ? err.message : "Failed to create session");
     } finally {
       setLoading(false);
     }
@@ -76,7 +76,7 @@ export function AddAgentModal({
   return (
     <div className={styles.overlay} onClick={onClose} onKeyDown={handleKeyDown}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.title}>New Agent</div>
+        <div className={styles.title}>New Session</div>
 
         <div className={styles.row}>
           <div className={styles.field}>
@@ -142,11 +142,11 @@ export function AddAgentModal({
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label}>Agent</label>
+          <label className={styles.label}>Server Agent</label>
           <select
             className={styles.select}
-            value={gatewayAgentId}
-            onChange={(e) => setGatewayAgentId(e.target.value)}
+            value={agentId}
+            onChange={(e) => setAgentId(e.target.value)}
           >
             {GATEWAY_AGENTS.map((a) => (
               <option key={a} value={a}>{a}</option>

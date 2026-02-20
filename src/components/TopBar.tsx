@@ -2,16 +2,16 @@ import { useState, useEffect } from "react";
 import { useDeckStats } from "../hooks";
 import styles from "./TopBar.module.css";
 
-const TABS = ["All Agents", "Active", "Queued", "Completed"] as const;
+const TABS = ["All Sessions", "Active", "Queued", "Completed"] as const;
 
 export function TopBar({
   activeTab,
   onTabChange,
-  onAddAgent,
+  onAddSession,
 }: {
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onAddAgent: () => void;
+  onAddSession: () => void;
 }) {
   const stats = useDeckStats();
   const [time, setTime] = useState(new Date());
@@ -39,8 +39,8 @@ export function TopBar({
             onClick={() => onTabChange(tab)}
           >
             {tab}
-            {tab === "All Agents" && (
-              <span className={styles.tabCount}>{stats.totalAgents}</span>
+            {tab === "All Sessions" && (
+              <span className={styles.tabCount}>{stats.totalSessions}</span>
             )}
             {tab === "Active" && stats.active > 0 && (
               <span className={styles.tabCount}>{stats.active}</span>
@@ -85,8 +85,8 @@ export function TopBar({
         </div>
       </div>
 
-      <button className={styles.addBtn} onClick={onAddAgent}>
-        <span>+</span> New Agent
+      <button className={styles.addBtn} onClick={onAddSession}>
+        <span>+</span> New Session
       </button>
     </div>
   );

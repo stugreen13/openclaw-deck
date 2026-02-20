@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import "./App.css";
-import { AddAgentModal } from "./components/AddAgentModal";
-import { AgentColumn } from "./components/AgentColumn";
+import { NewSessionModal } from "./components/NewSessionModal";
+import { SessionColumn } from "./components/SessionColumn";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
 import { useDeckInit } from "./hooks";
 import { useDeckStore } from "./lib/store";
-import type { AgentConfig } from "./types";
+import type { SessionConfig } from "./types";
 
 /**
- * Agent column configuration.
+ * Session column configuration.
  *
  * You're running default single-agent mode, so there's one agent: "main".
  * The Gateway routes all messages to the default workspace at:
@@ -23,7 +23,7 @@ import type { AgentConfig } from "./types";
  *
  * Then add matching entries here.
  */
-const AGENT_ACCENTS = [
+const SESSION_ACCENTS = [
   "#22d3ee",
   "#a78bfa",
   "#34d399",
@@ -38,20 +38,20 @@ const AGENT_ACCENTS = [
   "#2dd4bf",
 ];
 
-const DEFAULT_AGENTS: Partial<AgentConfig>[] = [
+const DEFAULT_SESSIONS: Partial<SessionConfig>[] = [
   { name: "Cass" },
-  { name: "TieoutTR", gatewayAgentId: "tieouttr" },
+  { name: "TieoutTR", agentId: "tieouttr" },
 ];
 
-function buildDefaultAgents(count: number): AgentConfig[] {
+function buildDefaultSessions(count: number): SessionConfig[] {
   return Array.from({ length: count }, (_, i) => ({
-    id: `agent-${i + 1}`,
-    name: DEFAULT_AGENTS[i]?.name ?? `Agent ${i + 1}`,
+    id: `session-${i + 1}`,
+    name: DEFAULT_SESSIONS[i]?.name ?? `Session ${i + 1}`,
     icon: String(i + 1),
-    accent: AGENT_ACCENTS[i % AGENT_ACCENTS.length],
+    accent: SESSION_ACCENTS[i % SESSION_ACCENTS.length],
     context: "",
     model: "claude-sonnet-4-5",
-    gatewayAgentId: DEFAULT_AGENTS[i]?.gatewayAgentId,
+    agentId: DEFAULT_SESSIONS[i]?.agentId,
   }));
 }
 
@@ -78,20 +78,20 @@ function getGatewayConfig() {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("All Agents");
+  const [activeTab, setActiveTab] = useState("All Sessions");
   const [showAddModal, setShowAddModal] = useState(false);
-  const [initialAgents] = useState<AgentConfig[]>(() =>
-    buildDefaultAgents(2)
+  const [initialSessions] = useState<SessionConfig[]>(() =>
+    buildDefaultSessions(2)
   );
   const columnOrder = useDeckStore((s) => s.columnOrder);
-  const createAgentOnGateway = useDeckStore((s) => s.createAgentOnGateway);
+  const createSessionOnGateway = useDeckStore((s) => s.createSessionOnGateway);
 
   const { gatewayUrl, token } = getGatewayConfig();
 
   useDeckInit({
     gatewayUrl,
     token,
-    agents: initialAgents,
+    sessions: initialSessions,
   });
 
   // Cmd+1-9 to focus column inputs
@@ -120,21 +120,21 @@ export default function App() {
       <TopBar
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        onAddAgent={() => setShowAddModal(true)}
+        onAddSession={() => setShowAddModal(true)}
       />
 
       <div className="deck-columns">
-        {columnOrder.map((agentId, index) => (
-          <AgentColumn key={agentId} agentId={agentId} columnIndex={index} />
+        {columnOrder.map((sessionId, index) => (
+          <SessionColumn key={sessionId} sessionId={sessionId} columnIndex={index} />
         ))}
       </div>
 
       <StatusBar />
 
       {showAddModal && (
-        <AddAgentModal
+        <NewSessionModal
           onClose={() => setShowAddModal(false)}
-          onCreate={createAgentOnGateway}
+          onCreate={createSessionOnGateway}
         />
       )}
     </div>
