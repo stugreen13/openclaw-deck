@@ -51,6 +51,8 @@ export interface AgentConfig {
   context: string;
   /** Agent envelope runtime shell (#1835) */
   shell?: string;
+  /** Gateway agent to route messages to (defaults to "main") */
+  gatewayAgentId?: string;
 }
 
 export interface ChatMessage {

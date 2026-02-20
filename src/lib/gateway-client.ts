@@ -16,9 +16,9 @@
  */
 
 import type {
+  GatewayEvent,
   GatewayFrame,
   GatewayResponse,
-  GatewayEvent,
 } from "../types";
 
 type EventHandler = (event: GatewayEvent) => void;
@@ -72,9 +72,9 @@ export class GatewayClient {
     this.options = {
       url: opts.url,
       token: opts.token ?? "",
-      onEvent: opts.onEvent ?? (() => {}),
-      onConnection: opts.onConnection ?? (() => {}),
-      onPairingRequired: opts.onPairingRequired ?? (() => {}),
+      onEvent: opts.onEvent ?? (() => { }),
+      onConnection: opts.onConnection ?? (() => { }),
+      onPairingRequired: opts.onPairingRequired ?? (() => { }),
       maxReconnectAttempts: opts.maxReconnectAttempts ?? Infinity,
       reconnectBaseDelay: opts.reconnectBaseDelay ?? 1000,
       requestTimeout: opts.requestTimeout ?? 30_000,

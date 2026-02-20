@@ -158,8 +158,11 @@ export function AgentColumn({ agentId, columnIndex }: { agentId: string; columnI
   const config = useAgentConfig(agentId);
   const send = useSendMessage(agentId);
   const deleteAgentOnGateway = useDeckStore((s) => s.deleteAgentOnGateway);
+  const updateAgentName = useDeckStore((s) => s.updateAgentName);
   const [input, setInput] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [editName, setEditName] = useState("");
   const scrollRef = useAutoScroll(session?.messages);
 
   if (!config || !session) return null;
@@ -225,21 +228,55 @@ export function AgentColumn({ agentId, columnIndex }: { agentId: string; columnI
           </div>
           <div className={styles.headerMeta}>
             {config.context ? <span>{config.context}</span> : null}
-            {config.model && (
-              <>
-                {config.context ? <span className={styles.metaDot}>·</span> : null}
-                <span style={{ color: config.accent, opacity: 0.5 }}>
-                  {config.model}
-                </span>
-              </>
-            )}
+            {config.context ? <span className={styles.metaDot}>·</span> : null}
+            <span style={{ color: config.accent, opacity: 0.5 }}>
+              {`agent:${config.gatewayAgentId ?? "main"}:${agentId}`}
+            </span>
             <FailoverBadge session={session} />
           </div>
         </div>
         <div className={styles.headerActions}>
-          <button className={styles.headerBtn} title="Settings">
-            ⚙
-          </button>
+          <div style={{ position: "relative" }}>
+            <button
+              className={styles.headerBtn}
+              title="Settings"
+              onClick={() => {
+                setEditName(config.name);
+                setShowSettings((v) => !v);
+              }}
+            >
+              ⚙
+            </button>
+            {showSettings && (
+              <div className={styles.settingsPopover}>
+                <label className={styles.settingsLabel}>Name</label>
+                <input
+                  className={styles.settingsInput}
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const trimmed = editName.trim();
+                      if (trimmed) updateAgentName(agentId, trimmed);
+                      setShowSettings(false);
+                    }
+                    if (e.key === "Escape") setShowSettings(false);
+                  }}
+                  autoFocus
+                />
+                <button
+                  className={styles.settingsSave}
+                  onClick={() => {
+                    const trimmed = editName.trim();
+                    if (trimmed) updateAgentName(agentId, trimmed);
+                    setShowSettings(false);
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            )}
+          </div>
           <button
             className={`${styles.deleteBtn} ${confirmDelete ? styles.confirmDelete : ""}`}
             title={confirmDelete ? "Click again to confirm" : "Delete agent"}

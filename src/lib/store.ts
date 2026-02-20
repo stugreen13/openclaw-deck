@@ -33,6 +33,7 @@ interface DeckStore {
   initialize: (config: Partial<DeckConfig>) => void;
   addAgent: (agent: AgentConfig) => void;
   removeAgent: (agentId: string) => void;
+  updateAgentName: (agentId: string, name: string) => void;
   reorderColumns: (order: string[]) => void;
   sendMessage: (agentId: string, text: string) => Promise<void>;
   setAgentStatus: (agentId: string, status: AgentStatus) => void;
@@ -165,6 +166,17 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
     });
   },
 
+  updateAgentName: (agentId, name) => {
+    set((state) => ({
+      config: {
+        ...state.config,
+        agents: state.config.agents.map((a) =>
+          a.id === agentId ? { ...a, name } : a
+        ),
+      },
+    }));
+  },
+
   reorderColumns: (order) => set({ columnOrder: order }),
 
   sendMessage: async (agentId, text) => {
@@ -197,10 +209,12 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
     }));
 
     try {
-      // All columns route through the default "main" agent on the gateway,
+      // Route through the agent's configured gateway agent (default "main"),
       // using distinct session keys to keep conversations separate.
-      const sessionKey = `agent:main:${agentId}`;
-      const { runId } = await client.runAgent("main", text, sessionKey);
+      const agentConfig = get().config.agents.find((a) => a.id === agentId);
+      const gwAgent = agentConfig?.gatewayAgentId ?? "main";
+      const sessionKey = `agent:${gwAgent}:${agentId}`;
+      const { runId } = await client.runAgent(gwAgent, text, sessionKey);
 
       // Create placeholder assistant message for streaming
       const assistantMsg: ChatMessage = {

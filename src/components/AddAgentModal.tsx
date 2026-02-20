@@ -18,6 +18,8 @@ const MODELS = [
   "claude-opus-4-6",
 ];
 
+const GATEWAY_AGENTS = ["main", "tieouttr"];
+
 export function AddAgentModal({
   onClose,
   onCreate,
@@ -30,6 +32,7 @@ export function AddAgentModal({
   const [accent, setAccent] = useState(ACCENTS[1]);
   const [context, setContext] = useState("");
   const [model, setModel] = useState(MODELS[0]);
+  const [gatewayAgentId, setGatewayAgentId] = useState(GATEWAY_AGENTS[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +55,7 @@ export function AddAgentModal({
         accent,
         context: context.trim() || name.trim(),
         model,
+        gatewayAgentId,
       });
       onClose();
     } catch (err) {
@@ -133,6 +137,19 @@ export function AddAgentModal({
           >
             {MODELS.map((m) => (
               <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className={styles.field}>
+          <label className={styles.label}>Agent</label>
+          <select
+            className={styles.select}
+            value={gatewayAgentId}
+            onChange={(e) => setGatewayAgentId(e.target.value)}
+          >
+            {GATEWAY_AGENTS.map((a) => (
+              <option key={a} value={a}>{a}</option>
             ))}
           </select>
         </div>

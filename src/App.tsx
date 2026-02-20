@@ -38,14 +38,20 @@ const AGENT_ACCENTS = [
   "#2dd4bf",
 ];
 
+const DEFAULT_AGENTS: Partial<AgentConfig>[] = [
+  { name: "Cass" },
+  { name: "TieoutTR", gatewayAgentId: "tieouttr" },
+];
+
 function buildDefaultAgents(count: number): AgentConfig[] {
   return Array.from({ length: count }, (_, i) => ({
     id: `agent-${i + 1}`,
-    name: `Agent ${i + 1}`,
+    name: DEFAULT_AGENTS[i]?.name ?? `Agent ${i + 1}`,
     icon: String(i + 1),
     accent: AGENT_ACCENTS[i % AGENT_ACCENTS.length],
     context: "",
     model: "claude-sonnet-4-5",
+    gatewayAgentId: DEFAULT_AGENTS[i]?.gatewayAgentId,
   }));
 }
 
@@ -75,7 +81,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("All Agents");
   const [showAddModal, setShowAddModal] = useState(false);
   const [initialAgents] = useState<AgentConfig[]>(() =>
-    buildDefaultAgents(7)
+    buildDefaultAgents(2)
   );
   const columnOrder = useDeckStore((s) => s.columnOrder);
   const createAgentOnGateway = useDeckStore((s) => s.createAgentOnGateway);

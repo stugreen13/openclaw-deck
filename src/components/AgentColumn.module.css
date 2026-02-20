@@ -550,6 +550,65 @@
   animation: pulse 1s ease-in-out infinite;
 }
 
+/* ─── Settings Popover ─── */
+.settingsPopover {
+  position: absolute;
+  top: 34px;
+  right: 0;
+  width: 200px;
+  background: #141519;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 50;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.settingsLabel {
+  display: block;
+  font-size: 10px;
+  font-family: "JetBrains Mono", monospace;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.settingsInput {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-family: "DM Sans", sans-serif;
+  outline: none;
+  margin-bottom: 8px;
+}
+
+.settingsInput:focus {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.settingsSave {
+  width: 100%;
+  padding: 5px 0;
+  border-radius: 5px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: "DM Sans", sans-serif;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.settingsSave:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 /* ─── Failover Badge ─── */
 .failoverBadge {
   font-size: 10px;
