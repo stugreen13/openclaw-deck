@@ -19,6 +19,15 @@ const DEFAULT_CONFIG: DeckConfig = {
   sessions: [],
 };
 
+// ─── Agent Info ───
+
+export interface AgentInfo {
+  id: string;
+  name?: string;
+  emoji?: string;
+  model?: string;
+}
+
 // ─── Store Shape ───
 
 interface DeckStore {
@@ -28,9 +37,12 @@ interface DeckStore {
   gatewayPairingRequired: boolean;
   columnOrder: string[];
   client: GatewayConnection | null;
+  agents: AgentInfo[];
+  defaultAgentId: string | null;
 
   // Actions
   initialize: (config: Partial<DeckConfig>) => void;
+  loadAgents: () => Promise<void>;
   addSession: (session: SessionConfig) => void;
   removeSession: (sessionId: string) => void;
   updateSessionName: (sessionId: string, name: string) => void;
@@ -113,6 +125,8 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
   gatewayPairingRequired: false,
   columnOrder: [],
   client: null,
+  agents: [],
+  defaultAgentId: null,
 
   initialize: (partialConfig) => {
     const existingConfig = get().config;
@@ -156,7 +170,8 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
             sessions[id] = { ...sessions[id], connected: true };
           }
           set({ sessions });
-          // Fetch chat history from server for all sessions
+          // Fetch agents and chat history from server
+          get().loadAgents();
           get().loadAllChatHistory();
         }
       },
@@ -487,6 +502,52 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       console.warn("[DeckStore] Gateway deleteAgent failed, removing locally:", err);
     }
     get().removeSession(sessionId);
+  },
+
+  loadAgents: async () => {
+    const { client } = get();
+    if (!client?.connected) return;
+    try {
+      // Fetch agent list, identities, and config models in parallel
+      const [listResult, configResult] = await Promise.all([
+        client.client.listAgents(),
+        client.client.getConfig().catch(() => null),
+      ]);
+
+      const agentIds = (listResult.agents ?? []).map((a: { id: string }) => a.id);
+
+      // Build model map from config agents.list (non-critical, fail gracefully)
+      const modelMap = new Map<string, string>();
+      try {
+        const parsed = configResult?.parsed ?? configResult;
+        const configAgents = parsed?.agents?.list;
+        if (Array.isArray(configAgents)) {
+          for (const a of configAgents) {
+            if (a?.id && typeof a.model === "string") {
+              modelMap.set(a.id, a.model);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[DeckStore] config parsing failed:", err);
+      }
+
+      // Fetch identity for each agent in parallel
+      const agents: AgentInfo[] = await Promise.all(
+        agentIds.map(async (id) => {
+          try {
+            const identity = await client.client.getAgentIdentity({ agentId: id });
+            return { id, name: identity.name, emoji: identity.emoji, model: modelMap.get(id) };
+          } catch {
+            return { id, model: modelMap.get(id) };
+          }
+        })
+      );
+
+      set({ agents, defaultAgentId: listResult.defaultId ?? null });
+    } catch (err) {
+      console.warn("[DeckStore] Failed to load agents:", err);
+    }
   },
 
   loadChatHistory: async (sessionId) => {

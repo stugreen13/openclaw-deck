@@ -14,11 +14,6 @@ const ACCENTS = [
   "#ef4444", // red
 ];
 
-interface AgentInfo {
-  id: string;
-  name?: string;
-}
-
 interface ServerSession {
   sessionKey: string;
   title?: string;
@@ -32,52 +27,25 @@ export function NewSessionModal({
   onCreate: (session: SessionConfig) => Promise<void>;
 }) {
   const [name, setName] = useState("");
-  const [icon, setIcon] = useState("");
   const [accent, setAccent] = useState(ACCENTS[1]);
   const [agentId, setAgentId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Server-driven data
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  // Use global agents from store
+  const agents = useDeckStore((s) => s.agents);
+  const defaultAgentId = useDeckStore((s) => s.defaultAgentId);
+  const client = useDeckStore((s) => s.client);
   const [serverSessions, setServerSessions] = useState<ServerSession[]>([]);
   const [selectedSessionKey, setSelectedSessionKey] = useState<string>("__new__");
   const [newSessionName, setNewSessionName] = useState("");
-  const [fetching, setFetching] = useState(true);
 
-  const client = useDeckStore((s) => s.client);
-
-  // Fetch agents and models on mount
+  // Pre-select default agent on mount
   useEffect(() => {
-    if (!client?.connected) {
-      setFetching(false);
-      return;
+    if (!agentId && (defaultAgentId || agents.length > 0)) {
+      setAgentId(defaultAgentId ?? agents[0]?.id ?? "main");
     }
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const agentsResult = await client.client.listAgents();
-
-        if (cancelled) return;
-
-        const agentList: AgentInfo[] = (agentsResult.agents ?? []).map(
-          (a) => ({
-            id: a.id,
-            name: a.name ?? a.identity?.name,
-          })
-        );
-        setAgents(agentList);
-        setAgentId(agentsResult.defaultId ?? agentList[0]?.id ?? "main");
-      } catch (err) {
-        console.warn("[NewSessionModal] Failed to fetch server data:", err);
-      } finally {
-        if (!cancelled) setFetching(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [client]);
+  }, [agents, defaultAgentId, agentId]);
 
   // Fetch sessions when agent changes
   useEffect(() => {
@@ -129,9 +97,7 @@ export function NewSessionModal({
       await onCreate({
         id: id || `session-${Date.now()}`,
         name: name.trim(),
-        icon: icon || name.trim()[0]?.toUpperCase() || "?",
         accent,
-        model,
         agentId,
         sessionKey,
       });
@@ -156,29 +122,16 @@ export function NewSessionModal({
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.title}>New Session</div>
 
-        <div className={styles.row}>
-          <div className={styles.field}>
-            <label className={styles.label}>Name</label>
-            <input
-              className={styles.input}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Research Agent"
-              autoFocus
-            />
-          </div>
-          <div className={styles.fieldSmall}>
-            <label className={styles.label}>Icon</label>
-            <input
-              className={styles.input}
-              value={icon}
-              onChange={(e) => setIcon(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="&#x25CE;"
-              style={{ textAlign: "center" }}
-            />
-          </div>
+        <div className={styles.field}>
+          <label className={styles.label}>Name</label>
+          <input
+            className={styles.input}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Research Agent"
+            autoFocus
+          />
         </div>
 
         <div className={styles.field}>
@@ -197,9 +150,7 @@ export function NewSessionModal({
 
         <div className={styles.field}>
           <label className={styles.label}>Server Agent</label>
-          {fetching ? (
-            <div className={styles.fetchingHint}>Loading agents...</div>
-          ) : agents.length > 0 ? (
+          {agents.length > 0 ? (
             <select
               className={styles.select}
               value={agentId}
@@ -252,33 +203,6 @@ export function NewSessionModal({
               onKeyDown={handleKeyDown}
               placeholder="session-name (e.g. research-jan)"
               style={{ marginTop: 6 }}
-            />
-          )}
-        </div>
-
-        <div className={styles.field}>
-          <label className={styles.label}>Model</label>
-          {fetching ? (
-            <div className={styles.fetchingHint}>Loading models...</div>
-          ) : models.length > 0 ? (
-            <select
-              className={styles.select}
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-            >
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.provider})
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              className={styles.input}
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="claude-sonnet-4-5"
             />
           )}
         </div>

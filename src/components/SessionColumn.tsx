@@ -159,6 +159,12 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
   const send = useSendMessage(sessionId);
   const deleteSessionOnGateway = useDeckStore((s) => s.deleteSessionOnGateway);
   const updateSessionName = useDeckStore((s) => s.updateSessionName);
+  const agent = useDeckStore((s) => {
+    const agentId = s.config.sessions.find((c) => c.id === sessionId)?.agentId ?? "main";
+    return s.agents.find((a) => a.id === agentId);
+  });
+  const agentEmoji = agent?.emoji;
+  const agentModel = agent?.model;
   const [input, setInput] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -219,7 +225,7 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
             borderColor: `${config.accent}30`,
           }}
         >
-          {columnIndex + 1}
+          {agentEmoji ?? columnIndex + 1}
         </div>
         <div className={styles.headerInfo}>
           <div className={styles.headerRow}>
@@ -234,6 +240,13 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
             </span>
             <FailoverBadge session={session} />
           </div>
+          {agentModel && (
+            <div className={styles.headerMeta}>
+              <span className={styles.modelLabel}>
+                {agentModel.split("/").pop()}
+              </span>
+            </div>
+          )}
         </div>
         <div className={styles.headerActions}>
           <div style={{ position: "relative" }}>
@@ -302,7 +315,7 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
               className={styles.emptyIcon}
               style={{ color: config.accent }}
             >
-              {columnIndex + 1}
+              {agentEmoji ?? columnIndex + 1}
             </div>
             <p>Send a message to start a conversation with {config.name}</p>
           </div>

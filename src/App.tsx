@@ -47,7 +47,6 @@ function buildDefaultSessions(count: number): SessionConfig[] {
   return Array.from({ length: count }, (_, i) => ({
     id: `session-${i + 1}`,
     name: DEFAULT_SESSIONS[i]?.name ?? `Session ${i + 1}`,
-    icon: String(i + 1),
     accent: SESSION_ACCENTS[i % SESSION_ACCENTS.length],
     model: "claude-sonnet-4-5",
     agentId: DEFAULT_SESSIONS[i]?.agentId,

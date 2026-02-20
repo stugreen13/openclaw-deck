@@ -89,6 +89,16 @@
   opacity: 0.4;
 }
 
+.agentName {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.modelLabel {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
 .headerActions {
   display: flex;
   gap: 4px;

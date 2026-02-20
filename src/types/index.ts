@@ -15,7 +15,6 @@ export type SessionStatus =
 export interface SessionConfig {
   id: string;
   name: string;
-  icon: string;
   accent: string;
   /** Path to agent workspace (maps to OpenClaw agent config) */
   workspace?: string;
