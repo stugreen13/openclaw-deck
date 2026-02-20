@@ -28,6 +28,12 @@ export interface AgentInfo {
   model?: string;
 }
 
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+}
+
 // ─── Store Shape ───
 
 interface DeckStore {
@@ -38,11 +44,16 @@ interface DeckStore {
   columnOrder: string[];
   client: GatewayConnection | null;
   agents: AgentInfo[];
+  allModels: ModelInfo[];
+  modelProvider: string;
   defaultAgentId: string | null;
 
   // Actions
   initialize: (config: Partial<DeckConfig>) => void;
   loadAgents: () => Promise<void>;
+  loadModels: () => Promise<void>;
+  setModelProvider: (provider: string) => void;
+  updateAgentOnGateway: (agentId: string, updates: { name?: string; model?: string }) => Promise<void>;
   addSession: (session: SessionConfig) => void;
   removeSession: (sessionId: string) => void;
   updateSessionName: (sessionId: string, name: string) => void;
@@ -126,6 +137,8 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
   columnOrder: [],
   client: null,
   agents: [],
+  allModels: [],
+  modelProvider: "vercel-ai-gateway",
   defaultAgentId: null,
 
   initialize: (partialConfig) => {
@@ -170,8 +183,8 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
             sessions[id] = { ...sessions[id], connected: true };
           }
           set({ sessions });
-          // Fetch agents and chat history from server
-          get().loadAgents();
+          // Fetch models first (needed for agent model resolution), then agents + history
+          get().loadModels().then(() => get().loadAgents());
           get().loadAllChatHistory();
         }
       },
@@ -514,9 +527,11 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
         client.client.getConfig().catch(() => null),
       ]);
 
-      const agentIds = (listResult.agents ?? []).map((a: { id: string }) => a.id);
-
       // Build model map from config agents.list (non-critical, fail gracefully)
+      // The server strips the provider prefix when saving, so config returns e.g.
+      // "anthropic/claude-3.7-sonnet" instead of "vercel-ai-gateway/anthropic/claude-3.7-sonnet".
+      // Resolve back to the full key by finding the known model that ends with the config value.
+      const knownModels = get().allModels;
       const modelMap = new Map<string, string>();
       try {
         const parsed = configResult?.parsed ?? configResult;
@@ -524,7 +539,11 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
         if (Array.isArray(configAgents)) {
           for (const a of configAgents) {
             if (a?.id && typeof a.model === "string") {
-              modelMap.set(a.id, a.model);
+              const configModel = a.model;
+              const match = knownModels.find((m) =>
+                m.id === configModel || m.id.endsWith("/" + configModel)
+              );
+              modelMap.set(a.id, match?.id ?? configModel);
             }
           }
         }
@@ -532,21 +551,52 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
         console.warn("[DeckStore] config parsing failed:", err);
       }
 
-      // Fetch identity for each agent in parallel
+      // Build agent info: name from list, emoji from getAgentIdentity
+      const rawAgents = (listResult.agents ?? []) as { id: string; name?: string }[];
       const agents: AgentInfo[] = await Promise.all(
-        agentIds.map(async (id) => {
+        rawAgents.map(async (a) => {
+          let emoji: string | undefined;
           try {
-            const identity = await client.client.getAgentIdentity({ agentId: id });
-            return { id, name: identity.name, emoji: identity.emoji, model: modelMap.get(id) };
-          } catch {
-            return { id, model: modelMap.get(id) };
-          }
+            const identity = await client.client.getAgentIdentity({ agentId: a.id });
+            emoji = identity.emoji;
+          } catch { /* ignore */ }
+          return { id: a.id, name: a.name, emoji, model: modelMap.get(a.id) };
         })
       );
 
       set({ agents, defaultAgentId: listResult.defaultId ?? null });
     } catch (err) {
       console.warn("[DeckStore] Failed to load agents:", err);
+    }
+  },
+
+  loadModels: async () => {
+    const { client } = get();
+    if (!client?.connected) return;
+    try {
+      const result = await client.client.listModels();
+      const raw = (result.models ?? []) as { id: string; name: string; provider: string }[];
+      const allModels: ModelInfo[] = raw.map((m) => ({
+        id: `${m.provider}/${m.id}`,
+        name: m.name,
+        provider: m.provider,
+      }));
+      set({ allModels });
+    } catch (err) {
+      console.warn("[DeckStore] Failed to load models:", err);
+    }
+  },
+
+  setModelProvider: (provider) => set({ modelProvider: provider }),
+
+  updateAgentOnGateway: async (agentId, updates) => {
+    const { client } = get();
+    if (!client?.connected) return;
+    try {
+      await client.client.updateAgent({ agentId, ...updates });
+      await get().loadAgents();
+    } catch (err) {
+      console.error("[DeckStore] Failed to update agent:", err);
     }
   },
 
@@ -612,5 +662,6 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
   partialize: (state) => ({
     columnOrder: state.columnOrder,
     config: state.config,
+    modelProvider: state.modelProvider,
   }),
 }));

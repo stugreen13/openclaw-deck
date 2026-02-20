@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useDeckStats } from "../hooks";
+import { useDeckStore } from "../lib/store";
 import styles from "./TopBar.module.css";
 
 const TABS = ["All Sessions", "Active", "Queued", "Completed"] as const;
@@ -14,6 +15,16 @@ export function TopBar({
   onAddSession: () => void;
 }) {
   const stats = useDeckStats();
+  const allModels = useDeckStore((s) => s.allModels);
+  const modelProvider = useDeckStore((s) => s.modelProvider);
+  const setModelProvider = useDeckStore((s) => s.setModelProvider);
+  const providers = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of allModels) {
+      if (m.provider) set.add(m.provider);
+    }
+    return Array.from(set).sort();
+  }, [allModels]);
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -84,6 +95,21 @@ export function TopBar({
           })}
         </div>
       </div>
+
+      {providers.length > 0 && (
+        <div className={styles.providerPicker}>
+          <label className={styles.providerLabel}>Model Provider</label>
+          <select
+            className={styles.providerSelect}
+            value={modelProvider}
+            onChange={(e) => setModelProvider(e.target.value)}
+          >
+            {providers.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <button className={styles.addBtn} onClick={onAddSession}>
         <span>+</span> New Session

@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react";
+import { useState, useMemo, type KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -55,9 +55,13 @@ function StatusBadge({
 function MessageBubble({
   message,
   accent,
+  agentName,
+  agentEmoji,
 }: {
   message: ChatMessage;
   accent: string;
+  agentName?: string;
+  agentEmoji?: string;
 }) {
   const isUser = message.role === "user";
 
@@ -93,7 +97,7 @@ function MessageBubble({
       }`}
     >
       {isUser && <div className={styles.roleLabel}>You</div>}
-      {!isUser && <div className={styles.roleLabel}>Assistant</div>}
+      {!isUser && <div className={styles.roleLabel}>{agentName || "Assistant"}{agentEmoji ? ` ${agentEmoji}` : ""}</div>}
       <div
         className={styles.messageText}
         style={
@@ -163,12 +167,22 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
     const agentId = s.config.sessions.find((c) => c.id === sessionId)?.agentId ?? "main";
     return s.agents.find((a) => a.id === agentId);
   });
+  const allModels = useDeckStore((s) => s.allModels);
+  const modelProvider = useDeckStore((s) => s.modelProvider);
+  const models = useMemo(
+    () => allModels.filter((m) => m.provider === modelProvider),
+    [allModels, modelProvider]
+  );
+  const updateAgentOnGateway = useDeckStore((s) => s.updateAgentOnGateway);
+  const agentId = useDeckStore((s) => s.config.sessions.find((c) => c.id === sessionId)?.agentId ?? "main");
   const agentEmoji = agent?.emoji;
   const agentModel = agent?.model;
   const [input, setInput] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [editName, setEditName] = useState("");
+  const [editLabel, setEditLabel] = useState("");
+  const [editAgentName, setEditAgentName] = useState("");
+  const [editModel, setEditModel] = useState("");
   const scrollRef = useAutoScroll(session?.messages);
 
   if (!config || !session) return null;
@@ -254,34 +268,65 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
               className={styles.headerBtn}
               title="Settings"
               onClick={() => {
-                setEditName(config.name);
+                setEditLabel(config.name);
+                setEditAgentName(agent?.name ?? "");
+                setEditModel(agentModel ?? "");
                 setShowSettings((v) => !v);
               }}
             >
               ⚙
             </button>
             {showSettings && (
-              <div className={styles.settingsPopover}>
-                <label className={styles.settingsLabel}>Name</label>
+              <div
+                className={styles.settingsPopover}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setShowSettings(false);
+                }}
+              >
+                <label className={styles.settingsLabel}>Label</label>
                 <input
                   className={styles.settingsInput}
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      const trimmed = editName.trim();
-                      if (trimmed) updateSessionName(sessionId, trimmed);
-                      setShowSettings(false);
-                    }
-                    if (e.key === "Escape") setShowSettings(false);
-                  }}
+                  value={editLabel}
+                  onChange={(e) => setEditLabel(e.target.value)}
                   autoFocus
                 />
+
+                <label className={styles.settingsLabel}>Agent Name</label>
+                <input
+                  className={styles.settingsInput}
+                  value={editAgentName}
+                  onChange={(e) => setEditAgentName(e.target.value)}
+                />
+
+                <label className={styles.settingsLabel}>Model</label>
+                <select
+                  className={styles.settingsSelect}
+                  value={editModel}
+                  onChange={(e) => setEditModel(e.target.value)}
+                >
+                  <option value="">— default —</option>
+                  {models.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+
                 <button
                   className={styles.settingsSave}
                   onClick={() => {
-                    const trimmed = editName.trim();
-                    if (trimmed) updateSessionName(sessionId, trimmed);
+                    const trimmedLabel = editLabel.trim();
+                    if (trimmedLabel) updateSessionName(sessionId, trimmedLabel);
+
+                    const nameChanged = editAgentName !== (agent?.name ?? "");
+                    const modelChanged = editModel !== (agentModel ?? "");
+                    if (nameChanged || modelChanged) {
+                      const updates: { name?: string; model?: string } = {};
+                      if (nameChanged) updates.name = editAgentName;
+                      if (modelChanged) updates.model = editModel || undefined;
+                      updateAgentOnGateway(agentId, updates);
+                    }
+
                     setShowSettings(false);
                   }}
                 >
@@ -324,7 +369,7 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
           msg.role === "compaction" ? (
             <CompactionDivider key={msg.id} message={msg} />
           ) : (
-            <MessageBubble key={msg.id} message={msg} accent={config.accent} />
+            <MessageBubble key={msg.id} message={msg} accent={config.accent} agentName={agent?.name} />
           )
         )}
       </div>

@@ -565,7 +565,7 @@
   position: absolute;
   top: 34px;
   right: 0;
-  width: 200px;
+  width: 260px;
   background: #141519;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
@@ -617,6 +617,43 @@
 
 .settingsSave:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+.settingsSelect {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-family: "DM Sans", sans-serif;
+  outline: none;
+  margin-bottom: 8px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.settingsSelect:focus {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.settingsSelect option {
+  background: #141519;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.settingsRow {
+  display: flex;
+  gap: 8px;
+}
+
+.settingsRow > div {
+  flex: 1;
+}
+
+.settingsRow > div:last-child {
+  flex: 0 0 56px;
 }
 
 /* ─── Failover Badge ─── */

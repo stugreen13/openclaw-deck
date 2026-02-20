@@ -120,6 +120,51 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ─── Provider Picker ─── */
+.providerPicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+}
+
+.providerLabel {
+  font-size: 10px;
+  font-family: "JetBrains Mono", monospace;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.providerSelect {
+  padding: 4px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.providerSelect:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.providerSelect:focus {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.providerSelect option {
+  background: #141519;
+  color: rgba(255, 255, 255, 0.85);
+}
+
 /* ─── Add Button ─── */
 .addBtn {
   padding: 6px 12px;
