@@ -123,7 +123,7 @@ export function NewSessionModal({
         <div className={styles.title}>New Session</div>
 
         <div className={styles.field}>
-          <label className={styles.label}>Name</label>
+          <label className={styles.label}>Session Label</label>
           <input
             className={styles.input}
             value={name}
@@ -158,7 +158,7 @@ export function NewSessionModal({
             >
               {agents.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name ?? a.id}
+                  {a.name ? `${a.name} - ${a.id}` : a.id}
                 </option>
               ))}
             </select>
@@ -201,7 +201,7 @@ export function NewSessionModal({
                 )
               }
               onKeyDown={handleKeyDown}
-              placeholder="session-name (e.g. research-jan)"
+              placeholder="session-id (e.g. research-jan)"
               style={{ marginTop: 6 }}
             />
           )}

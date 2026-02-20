@@ -58,6 +58,7 @@
 .headerInfo {
   flex: 1;
   min-width: 0;
+  position: relative;
 }
 
 .headerRow {
@@ -87,6 +88,16 @@
 
 .metaDot {
   opacity: 0.4;
+}
+
+.sessionKeyLink {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.sessionKeyLink:hover {
+  opacity: 0.8 !important;
+  text-decoration: underline;
 }
 
 .agentName {
@@ -601,8 +612,31 @@
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+.settingsBtnRow {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.settingsCancel {
+  flex: 1;
+  padding: 5px 0;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-family: "DM Sans", sans-serif;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.settingsCancel:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .settingsSave {
-  width: 100%;
+  flex: 1;
   padding: 5px 0;
   border-radius: 5px;
   border: none;
@@ -667,4 +701,71 @@
   padding: 1px 6px;
   margin-left: 6px;
   white-space: nowrap;
+}
+
+/* ─── Confirm Modal ─── */
+.confirmOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  border-radius: inherit;
+}
+
+.confirmModal {
+  background: #141519;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 16px 20px;
+  max-width: 280px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.confirmModal p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.4;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cancelBtn {
+  padding: 5px 12px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  font-family: "DM Sans", sans-serif;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.cancelBtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.confirmBtn {
+  padding: 5px 12px;
+  border-radius: 5px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: "DM Sans", sans-serif;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.confirmBtn:hover {
+  background: rgba(255, 255, 255, 0.18);
 }

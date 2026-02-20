@@ -1,4 +1,4 @@
-import { useState, useMemo, type KeyboardEvent } from "react";
+import { useState, useEffect, useMemo, type KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -162,7 +162,12 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
   const config = useSessionConfig(sessionId);
   const send = useSendMessage(sessionId);
   const deleteSessionOnGateway = useDeckStore((s) => s.deleteSessionOnGateway);
+  const resetSessionOnGateway = useDeckStore((s) => s.resetSessionOnGateway);
   const updateSessionName = useDeckStore((s) => s.updateSessionName);
+  const updateSessionKey = useDeckStore((s) => s.updateSessionKey);
+  const updateSessionAgentId = useDeckStore((s) => s.updateSessionAgentId);
+  const client = useDeckStore((s) => s.client);
+  const agents = useDeckStore((s) => s.agents);
   const agent = useDeckStore((s) => {
     const agentId = s.config.sessions.find((c) => c.id === sessionId)?.agentId ?? "main";
     return s.agents.find((a) => a.id === agentId);
@@ -179,11 +184,42 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
   const agentModel = agent?.model;
   const [input, setInput] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSessionSwitcher, setShowSessionSwitcher] = useState(false);
   const [editLabel, setEditLabel] = useState("");
   const [editAgentName, setEditAgentName] = useState("");
   const [editModel, setEditModel] = useState("");
+  const [editAgentId, setEditAgentId] = useState("");
+  const [editSessionKey, setEditSessionKey] = useState("");
+  const [serverSessions, setServerSessions] = useState<{ sessionKey: string; title?: string }[]>([]);
   const scrollRef = useAutoScroll(session?.messages);
+
+  // Fetch server sessions when session switcher opens or agent changes
+  useEffect(() => {
+    if (!showSessionSwitcher || !client?.connected || !editAgentId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await client.client.listSessions({ agentId: editAgentId });
+        if (cancelled) return;
+        const sessions = (result?.sessions ?? result ?? []).map(
+          (s: { sessionKey?: string; key?: string; title?: string; name?: string }) => ({
+            sessionKey: s.sessionKey ?? s.key ?? "",
+            title: s.title ?? s.name,
+          })
+        );
+        setServerSessions(sessions);
+        // Auto-select first session when agent changes
+        if (sessions.length > 0) {
+          setEditSessionKey(sessions[0].sessionKey);
+        }
+      } catch {
+        setServerSessions([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showSessionSwitcher, client, editAgentId]);
 
   if (!config || !session) return null;
 
@@ -249,7 +285,16 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
           <div className={styles.headerMeta}>
             {config.context ? <span>{config.context}</span> : null}
             {config.context ? <span className={styles.metaDot}>·</span> : null}
-            <span style={{ color: config.accent, opacity: 0.5 }}>
+            <span
+              className={styles.sessionKeyLink}
+              style={{ color: config.accent, opacity: 0.5 }}
+              onClick={() => {
+                setEditAgentId(agentId);
+                setEditSessionKey(config.sessionKey ?? `agent:${config.agentId ?? "main"}:${sessionId}`);
+                setShowSessionSwitcher((v) => !v);
+                setShowSettings(false);
+              }}
+            >
               {config.sessionKey ?? `agent:${config.agentId ?? "main"}:${sessionId}`}
             </span>
             <FailoverBadge session={session} />
@@ -259,6 +304,65 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
               <span className={styles.modelLabel}>
                 {agentModel.split("/").pop()}
               </span>
+            </div>
+          )}
+          {showSessionSwitcher && (
+            <div
+              className={styles.settingsPopover}
+              style={{ top: "100%", left: 0, right: "auto", marginTop: 4 }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setShowSessionSwitcher(false);
+              }}
+            >
+              <label className={styles.settingsLabel}>Agent</label>
+              <select
+                className={styles.settingsSelect}
+                value={editAgentId}
+                onChange={(e) => setEditAgentId(e.target.value)}
+              >
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name ? `${a.name} - ${a.id}` : a.id}
+                  </option>
+                ))}
+              </select>
+
+              <label className={styles.settingsLabel}>Session</label>
+              <select
+                className={styles.settingsSelect}
+                value={editSessionKey}
+                onChange={(e) => setEditSessionKey(e.target.value)}
+              >
+                {serverSessions.map((s) => (
+                  <option key={s.sessionKey} value={s.sessionKey}>
+                    {s.title ?? s.sessionKey}
+                  </option>
+                ))}
+                {!serverSessions.some((s) => s.sessionKey === editSessionKey) && (
+                  <option value={editSessionKey}>{editSessionKey}</option>
+                )}
+              </select>
+
+              <div className={styles.settingsBtnRow}>
+                <button className={styles.settingsCancel} onClick={() => setShowSessionSwitcher(false)}>
+                  Cancel
+                </button>
+                <button
+                  className={styles.settingsSave}
+                  onClick={() => {
+                    if (editAgentId !== agentId) {
+                      updateSessionAgentId(sessionId, editAgentId);
+                    }
+                    const currentSessionKey = config.sessionKey ?? `agent:${config.agentId ?? "main"}:${sessionId}`;
+                    if (editSessionKey !== currentSessionKey) {
+                      updateSessionKey(sessionId, editSessionKey);
+                    }
+                    setShowSessionSwitcher(false);
+                  }}
+                >
+                  Save
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -272,9 +376,10 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
                 setEditAgentName(agent?.name ?? "");
                 setEditModel(agentModel ?? "");
                 setShowSettings((v) => !v);
+                setShowSessionSwitcher(false);
               }}
             >
-              ⚙
+              <span style={{ fontSize: 16 }}>⚙</span>
             </button>
             {showSettings && (
               <div
@@ -283,7 +388,7 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
                   if (e.key === "Escape") setShowSettings(false);
                 }}
               >
-                <label className={styles.settingsLabel}>Label</label>
+                <label className={styles.settingsLabel}>Session Label</label>
                 <input
                   className={styles.settingsInput}
                   value={editLabel}
@@ -312,32 +417,44 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
                   ))}
                 </select>
 
-                <button
-                  className={styles.settingsSave}
-                  onClick={() => {
-                    const trimmedLabel = editLabel.trim();
-                    if (trimmedLabel) updateSessionName(sessionId, trimmedLabel);
+                <div className={styles.settingsBtnRow}>
+                  <button className={styles.settingsCancel} onClick={() => setShowSettings(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    className={styles.settingsSave}
+                    onClick={() => {
+                      const trimmedLabel = editLabel.trim();
+                      if (trimmedLabel) updateSessionName(sessionId, trimmedLabel);
 
-                    const nameChanged = editAgentName !== (agent?.name ?? "");
-                    const modelChanged = editModel !== (agentModel ?? "");
-                    if (nameChanged || modelChanged) {
-                      const updates: { name?: string; model?: string } = {};
-                      if (nameChanged) updates.name = editAgentName;
-                      if (modelChanged) updates.model = editModel || undefined;
-                      updateAgentOnGateway(agentId, updates);
-                    }
+                      const nameChanged = editAgentName !== (agent?.name ?? "");
+                      const modelChanged = editModel !== (agentModel ?? "");
+                      if (nameChanged || modelChanged) {
+                        const updates: { name?: string; model?: string } = {};
+                        if (nameChanged) updates.name = editAgentName;
+                        if (modelChanged) updates.model = editModel || undefined;
+                        updateAgentOnGateway(agentId, updates);
+                      }
 
-                    setShowSettings(false);
-                  }}
-                >
-                  Save
-                </button>
+                      setShowSettings(false);
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
               </div>
             )}
           </div>
           <button
+            className={styles.headerBtn}
+            title="Reset Session"
+            onClick={() => setConfirmReset(true)}
+          >
+            ↺
+          </button>
+          <button
             className={`${styles.deleteBtn} ${confirmDelete ? styles.confirmDelete : ""}`}
-            title={confirmDelete ? "Click again to confirm" : "Delete session"}
+            title={confirmDelete ? "Click again to confirm" : "Close Session"}
             onClick={() => {
               if (confirmDelete) {
                 deleteSessionOnGateway(sessionId);
@@ -350,6 +467,23 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
             {confirmDelete ? "✕" : "×"}
           </button>
         </div>
+
+        {/* Reset confirmation modal */}
+        {confirmReset && (
+          <div className={styles.confirmOverlay} onClick={() => setConfirmReset(false)}>
+            <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
+              <p>This will start a new session with the /new command. The session key will remain the same:</p>
+              <p style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 11, color: 'rgba(255,255,255,0.5)', wordBreak: 'break-all' }}>
+                {config.sessionKey ?? `agent:${config.agentId ?? "main"}:${sessionId}`}
+              </p>
+              <div className={styles.confirmActions}>
+                <button className={styles.cancelBtn} onClick={() => setConfirmReset(false)}>Cancel</button>
+                <button className={styles.confirmBtn} onClick={async () => { setConfirmReset(false); await resetSessionOnGateway(sessionId); window.location.reload(); }}>Confirm</button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* Messages */}
@@ -369,7 +503,7 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
           msg.role === "compaction" ? (
             <CompactionDivider key={msg.id} message={msg} />
           ) : (
-            <MessageBubble key={msg.id} message={msg} accent={config.accent} agentName={agent?.name} />
+            <MessageBubble key={msg.id} message={msg} accent={config.accent} agentName={agent?.name} agentEmoji={agent?.emoji} />
           )
         )}
       </div>

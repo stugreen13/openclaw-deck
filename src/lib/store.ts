@@ -57,6 +57,8 @@ interface DeckStore {
   addSession: (session: SessionConfig) => void;
   removeSession: (sessionId: string) => void;
   updateSessionName: (sessionId: string, name: string) => void;
+  updateSessionKey: (sessionId: string, sessionKey: string) => void;
+  updateSessionAgentId: (sessionId: string, agentId: string) => void;
   reorderColumns: (order: string[]) => void;
   sendMessage: (sessionId: string, text: string) => Promise<void>;
   setSessionStatus: (sessionId: string, status: SessionStatus) => void;
@@ -65,6 +67,8 @@ interface DeckStore {
   handleGatewayEvent: (event: GatewayEvent) => void;
   createSessionOnGateway: (session: SessionConfig) => Promise<void>;
   deleteSessionOnGateway: (sessionId: string) => Promise<void>;
+  resetSessionOnGateway: (sessionId: string) => Promise<void>;
+  compactSessionOnGateway: (sessionId: string) => Promise<void>;
   loadChatHistory: (sessionId: string) => Promise<void>;
   loadAllChatHistory: () => Promise<void>;
   disconnect: () => void;
@@ -228,6 +232,30 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
         ...state.config,
         sessions: state.config.sessions.map((a) =>
           a.id === sessionId ? { ...a, name } : a
+        ),
+      },
+    }));
+  },
+
+  updateSessionKey: (sessionId, sessionKey) => {
+    set((state) => ({
+      config: {
+        ...state.config,
+        sessions: state.config.sessions.map((a) =>
+          a.id === sessionId ? { ...a, sessionKey } : a
+        ),
+      },
+    }));
+    // Reload chat history for the new session key
+    get().loadChatHistory(sessionId);
+  },
+
+  updateSessionAgentId: (sessionId, agentId) => {
+    set((state) => ({
+      config: {
+        ...state.config,
+        sessions: state.config.sessions.map((a) =>
+          a.id === sessionId ? { ...a, agentId } : a
         ),
       },
     }));
@@ -515,6 +543,45 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       console.warn("[DeckStore] Gateway deleteAgent failed, removing locally:", err);
     }
     get().removeSession(sessionId);
+  },
+
+  resetSessionOnGateway: async (sessionId) => {
+    const { client, config } = get();
+    if (!client?.connected) return;
+    const sessionConfig = config.sessions.find((s) => s.id === sessionId);
+    if (!sessionConfig) return;
+    const gwAgent = sessionConfig.agentId ?? "main";
+    const sessionKey = sessionConfig.sessionKey ?? `agent:${gwAgent}:${sessionId}`;
+    try {
+      await client.client.resetSession({ key: sessionKey, reason: "new" });
+      // Clear local messages
+      set((state) => {
+        const session = state.sessions[sessionId];
+        if (!session) return state;
+        return {
+          sessions: {
+            ...state.sessions,
+            [sessionId]: { ...session, messages: [], status: "idle", activeRunId: null },
+          },
+        };
+      });
+    } catch (err) {
+      console.error("[DeckStore] Failed to reset session:", err);
+    }
+  },
+
+  compactSessionOnGateway: async (sessionId) => {
+    const { client, config } = get();
+    if (!client?.connected) return;
+    const sessionConfig = config.sessions.find((s) => s.id === sessionId);
+    if (!sessionConfig) return;
+    const gwAgent = sessionConfig.agentId ?? "main";
+    const sessionKey = sessionConfig.sessionKey ?? `agent:${gwAgent}:${sessionId}`;
+    try {
+      await client.client.compactSession({ key: sessionKey });
+    } catch (err) {
+      console.error("[DeckStore] Failed to compact session:", err);
+    }
   },
 
   loadAgents: async () => {
