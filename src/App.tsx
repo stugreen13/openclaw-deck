@@ -49,7 +49,6 @@ function buildDefaultSessions(count: number): SessionConfig[] {
     name: DEFAULT_SESSIONS[i]?.name ?? `Session ${i + 1}`,
     icon: String(i + 1),
     accent: SESSION_ACCENTS[i % SESSION_ACCENTS.length],
-    context: "",
     model: "claude-sonnet-4-5",
     agentId: DEFAULT_SESSIONS[i]?.agentId,
   }));

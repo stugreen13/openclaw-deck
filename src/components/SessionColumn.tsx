@@ -230,7 +230,7 @@ export function SessionColumn({ sessionId, columnIndex }: { sessionId: string; c
             {config.context ? <span>{config.context}</span> : null}
             {config.context ? <span className={styles.metaDot}>·</span> : null}
             <span style={{ color: config.accent, opacity: 0.5 }}>
-              {`agent:${config.agentId ?? "main"}:${sessionId}`}
+              {config.sessionKey ?? `agent:${config.agentId ?? "main"}:${sessionId}`}
             </span>
             <FailoverBadge session={session} />
           </div>

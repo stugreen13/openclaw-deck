@@ -63,12 +63,19 @@ function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Resolve a sessionKey like "agent:<gwAgentId>:main" to the local column ID. */
+/** Resolve a sessionKey like "agent:<gwAgentId>:<sessionPart>" to the local column ID. */
 function resolveColumnId(
   sessionKey: string | undefined,
   sessions: SessionConfig[]
 ): string {
-  const parts = sessionKey?.split(":") ?? [];
+  if (!sessionKey) return sessions[0]?.id ?? "main";
+
+  // First try exact sessionKey match
+  const exactMatch = sessions.find((s) => s.sessionKey === sessionKey);
+  if (exactMatch) return exactMatch.id;
+
+  // Fall back to matching by agentId
+  const parts = sessionKey.split(":");
   const gwAgentId = parts[1] ?? "main";
   const match = sessions.find(
     (a) => (a.agentId ?? "main") === gwAgentId
@@ -226,7 +233,7 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       // using distinct session keys to keep conversations separate.
       const sessionConfig = get().config.sessions.find((a) => a.id === sessionId);
       const gwAgent = sessionConfig?.agentId ?? "main";
-      const sessionKey = `agent:${gwAgent}:main`;
+      const sessionKey = sessionConfig?.sessionKey ?? `agent:${gwAgent}:${sessionId}`;
       const idempotencyKey = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const { runId } = await client.client.sendToAgent({
         agentId: gwAgent,
@@ -455,20 +462,8 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
   },
 
   createSessionOnGateway: async (sessionConfig) => {
-    const { client } = get();
-    try {
-      if (client?.connected) {
-        await client.client.call("agents.create", {
-          id: sessionConfig.id,
-          name: sessionConfig.name,
-          model: sessionConfig.model,
-          context: sessionConfig.context,
-          shell: sessionConfig.shell,
-        });
-      }
-    } catch (err) {
-      console.warn("[DeckStore] Gateway createAgent failed, adding locally:", err);
-    }
+    // If the user picked an existing server session, no server call needed.
+    // Just add the column locally.
     get().addSession(sessionConfig);
   },
 

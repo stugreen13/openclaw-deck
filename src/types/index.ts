@@ -22,11 +22,13 @@ export interface SessionConfig {
   /** Model override for this session */
   model?: string;
   /** Short description of session's role */
-  context: string;
+  context?: string;
   /** Agent envelope runtime shell (#1835) */
   shell?: string;
   /** Gateway agent to route messages to (defaults to "main") */
   agentId?: string;
+  /** Server session key (e.g. "agent:main:abc123"). Auto-generated if omitted. */
+  sessionKey?: string;
 }
 
 export interface ChatMessage {

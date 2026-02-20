@@ -126,6 +126,12 @@
   background: #141519;
 }
 
+.fetchingHint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+  padding: 8px 0;
+}
+
 .error {
   font-size: 12px;
   color: #ef4444;
