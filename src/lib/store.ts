@@ -9,7 +9,7 @@ import type {
   GatewayEvent,
   SessionUsage,
 } from "../types";
-import { GatewayClient } from "./gateway-client";
+import { GatewayConnection } from "./gateway-wrapper";
 
 // ─── Default Config ───
 
@@ -27,7 +27,7 @@ interface DeckStore {
   gatewayConnected: boolean;
   gatewayPairingRequired: boolean;
   columnOrder: string[];
-  client: GatewayClient | null;
+  client: GatewayConnection | null;
 
   // Actions
   initialize: (config: Partial<DeckConfig>) => void;
@@ -113,8 +113,8 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       }
     }
 
-    // Create the gateway client
-    const client = new GatewayClient({
+    // Create the gateway connection (reconnecting wrapper around OpenClawClient)
+    const client = new GatewayConnection({
       url: config.gatewayUrl,
       token: config.token,
       onEvent: (event) => get().handleGatewayEvent(event),
@@ -214,7 +214,13 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
       const agentConfig = get().config.agents.find((a) => a.id === agentId);
       const gwAgent = agentConfig?.gatewayAgentId ?? "main";
       const sessionKey = `agent:${gwAgent}:${agentId}`;
-      const { runId } = await client.runAgent(gwAgent, text, sessionKey);
+      const idempotencyKey = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const { runId } = await client.client.sendToAgent({
+        agentId: gwAgent,
+        message: text,
+        sessionKey,
+        idempotencyKey,
+      }) as { runId: string; status: string };
 
       // Create placeholder assistant message for streaming
       const assistantMsg: ChatMessage = {
@@ -443,7 +449,7 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
     const { client } = get();
     try {
       if (client?.connected) {
-        await client.createAgent({
+        await client.client.call("agents.create", {
           id: agent.id,
           name: agent.name,
           model: agent.model,
@@ -461,7 +467,7 @@ export const useDeckStore = create<DeckStore>()(persist((set, get) => ({
     const { client } = get();
     try {
       if (client?.connected) {
-        await client.deleteAgent(agentId);
+        await client.client.deleteAgent({ agentId });
       }
     } catch (err) {
       console.warn("[DeckStore] Gateway deleteAgent failed, removing locally:", err);

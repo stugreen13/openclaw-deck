@@ -1,32 +1,6 @@
-// ─── OpenClaw Gateway WebSocket Protocol Types ───
+// ─── OpenClaw Gateway Protocol Types (re-exported from openclaw-client) ───
 
-/** Outbound request frame */
-export interface GatewayRequest {
-  type: "req";
-  id: string;
-  method: string;
-  params?: Record<string, unknown>;
-}
-
-/** Inbound response frame */
-export interface GatewayResponse {
-  type: "res";
-  id: string;
-  ok: boolean;
-  payload?: unknown;
-  error?: { code: string; message: string };
-}
-
-/** Inbound event frame (streaming, presence, ticks) */
-export interface GatewayEvent {
-  type: "event";
-  event: string;
-  payload: unknown;
-  seq?: number;
-  stateVersion?: number;
-}
-
-export type GatewayFrame = GatewayRequest | GatewayResponse | GatewayEvent;
+export type { EventFrame as GatewayEvent } from "openclaw-client";
 
 // ─── Agent Types ───
 
