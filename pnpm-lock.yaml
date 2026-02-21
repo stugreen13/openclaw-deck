@@ -12,8 +12,8 @@ importers:
         specifier: ^11.11.1
         version: 11.11.1
       openclaw-client:
-        specifier: ^2.1.0
-        version: 2.1.0
+        specifier: ^2.1.1
+        version: 2.1.1
       react:
         specifier: ^19.0.0
         version: 19.2.4
@@ -788,8 +788,8 @@ packages:
   node-releases@2.0.27:
     resolution: {integrity: sha512-nmh3lCkYZ3grZvqcCH+fjmQ7X+H0OeZgP40OierEaAptX4XofMh5kwNbWh7lBduUzCcV/8kZ+NDLCwm2iorIlA==}
 
-  openclaw-client@2.1.0:
-    resolution: {integrity: sha512-ySg/v5WlpkbK5WDx4OajfZwgsqMrfOSybZxUTnXdg5tF6uCisgP2ADq+z96XKWOF84P9aQtKmttbvgoKVNhMLA==}
+  openclaw-client@2.1.1:
+    resolution: {integrity: sha512-aEI+bnr/zmvnceWlXDSclpDsy39QGntlWwjKvDfItiH4ell41DlUNM+Ihkwx3F1kznTV+toExrFKHj7FH6RqJA==}
     engines: {node: '>=18.0.0'}
 
   parse-entities@4.0.2:
@@ -1854,7 +1854,7 @@ snapshots:
 
   node-releases@2.0.27: {}
 
-  openclaw-client@2.1.0: {}
+  openclaw-client@2.1.1: {}
 
   parse-entities@4.0.2:
     dependencies:
